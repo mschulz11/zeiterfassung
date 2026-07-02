@@ -1,0 +1,24 @@
+# Build-Kontext-Killer – alles, was nicht ins Image muss.
+node_modules
+dist
+.git
+.gitignore
+.dockerignore
+Dockerfile
+docker-compose.yml
+nginx.conf
+README.md
+
+*.log
+.DS_Store
+.idea
+.vscode
+
+# vite cache & temp
+.tmp
+*.tsbuildinfo
+
+# lokale Env
+.env
+.env.*
+!.env.example

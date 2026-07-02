@@ -38,12 +38,54 @@ Mobile-first PWA für persönliche Zeiterfassung — portabler Nachfolger deines
 
 ## Lokal starten
 
+### Variante 1: direkt mit Node (>= 22)
+
 ```bash
 npm install
 npm run dev          # Dev-Server auf http://localhost:5173
 npm run build        # Production-Build nach dist/
 npm run preview      # Build lokal serven
 ```
+
+### Variante 2: Docker (kein Node nötig)
+
+**Production** (statischer nginx-Container, fertig zum Deploy):
+
+```bash
+docker compose up -d --build
+# → http://localhost:8080
+```
+
+Stoppen & entfernen:
+```bash
+docker compose down
+```
+
+**Development** mit Live-Reload – Code in WSL/Windows bearbeiten,
+Vite rendert im Container neu:
+
+```bash
+docker compose --profile dev up zeiterfassung-dev
+# → http://localhost:5173
+```
+
+Nur das Production-Image bauen (ohne `docker compose`):
+```bash
+docker build --target prod -t zeiterfassung:latest .
+docker run --rm -p 8080:80 zeiterfassung:latest
+```
+
+#### Was das Dockerfile macht
+
+- **Stage `dev`** – Node-22-Container mit installierten Deps, Vite dev server
+- **Stage `build`** – baut die App (`npm run build` → `dist/`)
+- **Stage `prod`** – nginx:alpine, legt `dist/` nach `/usr/share/nginx/html`,
+  mit SPA-Fallback, Cache-Strategien für Service Worker und gehashte Assets,
+  Security-Header
+
+Die Compose-Volumes im Dev-Modus mounten den Source-Code read-write, aber
+`node_modules` bleiben im Container (Windows-Mount ist mit Linux nicht
+kompatibel und würde sonst die Deps zerschießen).
 
 ## Installation auf dem Handy
 
