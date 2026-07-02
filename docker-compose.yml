@@ -1,0 +1,56 @@
+# docker compose v2 – https://docs.docker.com/compose/compose-v2/
+#
+# Standard (production):
+#   docker compose up -d --build
+#   → http://localhost:8080
+#
+# Dev mit Live-Reload:
+#   docker compose --profile dev up zeiterfassung-dev
+#   → http://localhost:5173
+
+services:
+  zeiterfassung:
+    build:
+      context: .
+      target: prod
+      args:
+        NODE_VERSION: "22"
+    image: zeiterfassung:latest
+    container_name: zeiterfassung
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  zeiterfassung-dev:
+    build:
+      context: .
+      target: dev
+      args:
+        NODE_VERSION: "22"
+    image: zeiterfassung:dev
+    container_name: zeiterfassung-dev
+    profiles: ["dev"]
+    ports:
+      - "5173:5173"
+    volumes:
+      # Source-Mounts für Live-Reload. node_modules bleiben im Image,
+      # weil die auf Linux-Containern und Windows/WSL nicht kompatibel sind.
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./index.html:/app/index.html
+      - ./vite.config.ts:/app/vite.config.ts
+      - ./tailwind.config.js:/app/tailwind.config.js
+      - ./postcss.config.js:/app/postcss.config.js
+      - ./tsconfig.app.json:/app/tsconfig.app.json
+      - ./tsconfig.json:/app/tsconfig.json
+      - ./tsconfig.node.json:/app/tsconfig.node.json
+      - ./package.json:/app/package.json
+      - ./package-lock.json:/app/package-lock.json
+    environment:
+      - NODE_ENV=development
