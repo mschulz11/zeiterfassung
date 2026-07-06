@@ -1,156 +1,119 @@
-import type { Entry, EntryStatus } from '../db/types';
 import { useTranslation } from 'react-i18next';
-import { db } from '../db/database';
-import { EntryForm } from './EntryForm';
-import { StatusBadge } from './StatusBadge';
-import { hhmmToMinutes, minutesToHHMM } from '../lib/format';
-import { useState } from 'react';
+import type { DayStatus, Entry } from '../db/types';
+import { blockMinutes, computeBreakMinutes, entriesDurationMinutes, minutesToHHMM } from '../lib/format';
 import clsx from 'clsx';
 import { formatDateLong } from '../lib/dates';
-import type { AppSettings } from '../db/types';
+import { StatusMenu } from './StatusMenu';
 
 interface Props {
   date: string;
-  weekdayKey: keyof AppSettings['dayTargets'];
   entries: Entry[];
+  status: DayStatus;
   targetMinutes: number;
   language: 'de' | 'en';
-  onChange: () => void;
+  variant: 'today' | 'past';
+  onAddBlock: () => void;
+  onDeleteBlock: (id: number) => void;
+  onUpdateBlock: (id: number, changes: Pick<Entry, 'fromTime'> | Pick<Entry, 'toTime'>) => void;
+  onStatusChange: (status: DayStatus) => void;
+  onPromote: () => void;
 }
 
-function dayStatus(entries: Entry[]): EntryStatus {
-  if (entries.length === 0) return 'planned';
-  // Priorität: explizite Tages-Status-Markierung (sick/vacation/...) wenn vorhanden
-  // Wir verwenden hier den Status des ersten Eintrags als Tagesstatus, weil
-  // krank/urlaub/frei typischerweise als "der Tag ist X" gesetzt werden.
-  return entries[0].status;
-}
-
-export function DayCard({ date, weekdayKey, entries, targetMinutes, language, onChange }: Props) {
+export function DayCard({
+  date,
+  entries,
+  status,
+  targetMinutes,
+  language,
+  variant,
+  onAddBlock,
+  onDeleteBlock,
+  onUpdateBlock,
+  onStatusChange,
+  onPromote,
+}: Props) {
   const { t } = useTranslation();
-  const [editing, setEditing] = useState(false);
-  const status = dayStatus(entries);
-  const isMarked = ['sick', 'vacation', 'free', 'halfday', 'manual'].includes(status);
-
-  const actualMinutes = entries
-    .filter((e) => e.status !== 'planned')
-    .reduce(
-      (sum, e) => sum + (hhmmToMinutes(e.toTime) - hhmmToMinutes(e.fromTime) - (e.breakMinutes || 0)),
-      0,
-    );
-
-  // Hintergrundfarbe nach Excel-Logik
-  const bgClass = clsx({
-    'bg-yellow-300':           status === 'planned' && entries.length > 0,
-    'bg-white':                status === 'entered',
-    'bg-yellow-100':           status === 'halfday',
-    'bg-red-200':              status === 'sick',
-    'bg-blue-200':             status === 'vacation',
-    'bg-slate-200':            status === 'free',
-    'bg-violet-200':           status === 'manual',
-  });
+  const inactive = ['free', 'vacation', 'sick'].includes(status);
+  const effectiveTarget = status === 'halfday' ? 240 : inactive ? 0 : targetMinutes;
+  const actualMinutes = inactive || status === 'planned' ? 0 : entriesDurationMinutes(entries);
+  const pauseMinutes = inactive ? 0 : computeBreakMinutes(entries);
 
   return (
-    <div className={clsx('rounded-2xl border border-slate-200 shadow-sm overflow-hidden', bgClass)}>
-      <div className="flex items-center justify-between px-3 pt-3">
+    <div className="overflow-visible rounded-lg border border-[var(--border)] bg-[var(--bg-card)] shadow-sm">
+      <div className="flex items-start justify-between gap-3 px-3 pt-3">
         <div>
-          <div className="text-xs uppercase tracking-wide font-semibold text-slate-700">
-            {t(`day.${weekdayKey}`)}
+          <div className="text-xs font-semibold uppercase text-[var(--text-muted)]">
+            {variant === 'today' ? t('today') : t('dayLabel')}
           </div>
-          <div className="text-sm text-slate-700">
+          <div className="text-sm font-medium text-[var(--text-primary)]">
             {formatDateLong(date, language)}
           </div>
         </div>
-        <StatusBadge status={status} />
+        <StatusMenu value={status} onChange={onStatusChange} />
       </div>
 
-      <div className="px-3 py-2 space-y-1">
+      <div className={clsx('space-y-2 px-3 py-3', inactive && 'opacity-55')}>
         {entries.length === 0 && (
-          <div className="text-sm text-slate-500 italic">{t('noEntries')}</div>
+          <div className="rounded-lg border border-dashed border-[var(--border)] px-3 py-4 text-sm text-[var(--text-muted)]">
+            {t('noEntries')}
+          </div>
         )}
         {entries.map((e) => (
-          <EntryRow key={e.id} entry={e} onChange={onChange} />
+          <div key={e.id} className="grid grid-cols-[1fr_auto_1fr_auto] items-center gap-2">
+            <input
+              type="time"
+              value={e.fromTime}
+              disabled={inactive}
+              onChange={(event) => event.target.value && onUpdateBlock(e.id!, { fromTime: event.target.value })}
+              className="input font-mono"
+            />
+            <span className="text-[var(--text-muted)]">-</span>
+            <input
+              type="time"
+              value={e.toTime}
+              disabled={inactive}
+              onChange={(event) => event.target.value && onUpdateBlock(e.id!, { toTime: event.target.value })}
+              className={clsx('input font-mono', blockMinutes(e) === 0 && !inactive && 'border-red-400')}
+            />
+            <button
+              type="button"
+              disabled={inactive}
+              onClick={() => onDeleteBlock(e.id!)}
+              className="btn btn-ghost h-10 w-10 px-0"
+              title={t('deleteEntry')}
+            >
+              ×
+            </button>
+          </div>
         ))}
       </div>
 
-      <div className="px-3 pb-3 pt-1 flex items-end justify-between">
-        <div className="text-xs text-slate-600 font-mono space-x-3">
-          <span>
-            {t('actual')}: <b>{minutesToHHMM(actualMinutes)}</b>
-          </span>
-          <span>
-            {t('target')}: <b>{minutesToHHMM(targetMinutes)}</b>
-          </span>
-          <span
-            className={
-              actualMinutes >= targetMinutes ? 'text-emerald-700' : 'text-red-700'
-            }
-          >
-            Δ {minutesToHHMM(actualMinutes - targetMinutes)}
-          </span>
+      <div className="border-t border-[var(--border)] px-3 pb-3 pt-3">
+        <div className="space-y-1 text-xs font-mono text-[var(--text-muted)]">
+          <div>{t('break')}: {minutesToHHMM(pauseMinutes)}</div>
+          <div>
+            {t('actual')} {minutesToHHMM(actualMinutes)} · {t('target')} {minutesToHHMM(effectiveTarget)} ·{' '}
+            <span className={actualMinutes >= effectiveTarget ? 'text-emerald-600 dark:text-emerald-300' : 'text-red-600 dark:text-red-300'}>
+              Δ {minutesToHHMM(actualMinutes - effectiveTarget)}
+            </span>
+          </div>
         </div>
-        {!isMarked && (
-          <button onClick={() => setEditing(true)} className="btn btn-primary text-xs px-2 py-1">
+
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            disabled={inactive}
+            onClick={onAddBlock}
+            className="btn btn-ghost flex-1 border border-[var(--border)]"
+          >
             + {t('addEntry')}
           </button>
-        )}
-      </div>
-
-      {editing && (
-        <EntryForm
-          date={date}
-          existing={entries}
-          onClose={() => setEditing(false)}
-          onSaved={onChange}
-        />
-      )}
-    </div>
-  );
-}
-
-function EntryRow({ entry, onChange }: { entry: Entry; onChange: () => void }) {
-  const { t } = useTranslation();
-  const isPlanned = entry.status === 'planned';
-
-  async function promoteToEntered() {
-    await db.entries.update(entry.id!, {
-      status: 'entered',
-      updatedAt: Date.now(),
-    });
-    onChange();
-  }
-
-  async function remove() {
-    if (!confirm(t('msg.confirmDelete'))) return;
-    await db.entries.delete(entry.id!);
-    onChange();
-  }
-
-  return (
-    <div className="flex items-center justify-between bg-white/70 rounded-xl px-2 py-1">
-      <div className="text-sm font-mono">
-        {entry.fromTime}–{entry.toTime}
-        {entry.breakMinutes ? (
-          <span className="text-slate-500"> · {t('break')} {entry.breakMinutes}m</span>
-        ) : null}
-      </div>
-      <div className="flex items-center gap-1">
-        {isPlanned && (
-          <button
-            onClick={promoteToEntered}
-            className="text-xs px-2 py-0.5 rounded-md bg-slate-900 text-white"
-            title="als real markieren"
-          >
-            ✓
-          </button>
-        )}
-        <button
-          onClick={remove}
-          className="text-xs px-2 py-0.5 rounded-md bg-red-500 text-white"
-          title={t('delete')}
-        >
-          ✕
-        </button>
+          {variant === 'today' && (
+            <button type="button" onClick={onPromote} className="btn btn-primary flex-1">
+              ✓ {t('enterDay')}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

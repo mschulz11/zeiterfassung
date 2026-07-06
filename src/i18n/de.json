@@ -33,6 +33,10 @@
   "delete": "Löschen",
   "edit": "Bearbeiten",
   "entries": "Blöcke",
+  "dayLabel": "Tag",
+  "enterDay": "Eintragen",
+  "loadOlderDays": "Ältere Tage laden",
+  "showWeekend": "Wochenende anzeigen",
   "day": {
     "Mon": "Mo",
     "Tue": "Di",
@@ -41,6 +45,14 @@
     "Fri": "Fr",
     "Sat": "Sa",
     "Sun": "So"
+  },
+  "dayStatus": {
+    "planned": "geplant",
+    "worked": "gearbeitet",
+    "halfday": "halbtags",
+    "sick": "krank",
+    "vacation": "Urlaub",
+    "free": "frei"
   },
   "entryStatus": {
     "planned": "geplant",
@@ -51,7 +63,17 @@
     "free": "frei",
     "manual": "manuel"
   },
+  "theme": {
+    "auto": "Auto",
+    "light": "Hell",
+    "dark": "Dunkel"
+  },
   "settings.heading": "Einstellungen",
+  "settings.theme": "Theme",
+  "settings.lookback": "Zeitraum (Tage)",
+  "settings.weekend": "Wochenende anzeigen",
+  "settings.defaultBlocks": "Default-Blöcke",
+  "settings.noDefaultBlocks": "Keine Default-Blöcke",
   "settings.language": "Sprache",
   "settings.dayTargets": "Tages-Soll (Minuten)",
   "settings.webdav": "OneDrive / WebDAV",
