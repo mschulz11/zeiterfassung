@@ -24,16 +24,17 @@ ENV NODE_ENV=development
 # Wir installieren deps einmalig ins Image — der Source-Code wird vom
 # Compose-Volume gemounted und beim Speichern automatisch neu geladen.
 COPY package.json package-lock.json ./
-RUN npm install
+RUN npm ci
 EXPOSE 5173
 # --host sorgt dafür, dass Vite von außerhalb des Containers erreichbar ist.
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
 
 # ---------------- build ----------------
 FROM base AS build
-ENV NODE_ENV=production
 COPY package.json package-lock.json ./
-RUN npm ci
+# Build-Tools wie vite/tsc liegen in devDependencies und werden nur im
+# transienten Build-Stage gebraucht. Das finale Image enthält nur dist/.
+RUN npm ci --include=dev
 COPY . .
 RUN npm run build
 
@@ -44,7 +45,7 @@ LABEL org.opencontainers.image.title="Zeiterfassung" \
       org.opencontainers.image.licenses="MIT"
 
 COPY --from=build /app/dist /usr/share/nginx/html
-#COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Tiny healthcheck – nginx reicht aus, der Service Worker & PWA-Shell
 # werden clientseitig getestet.
