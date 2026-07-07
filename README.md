@@ -1,167 +1,200 @@
 # Zeiterfassung
 
-Mobile-first PWA für persönliche Zeiterfassung — portabler Nachfolger deines Excel-Sheets.
+Mobile-first PWA fuer persoenliche Zeiterfassung. Iteration 2 ersetzt den
+Excel-nahen Wochenraster durch einen Heute-oben-Stream mit Inline-Bearbeitung,
+lokaler IndexedDB-Persistenz und optionalem Dark Mode.
 
-## Was ist drin (Iteration 1)
+## Was ist drin (Iteration 2)
 
-- Woche Mo–Fr mit navigierbaren Wochen (vor/zurück/heute)
-- Pro Tag beliebig viele Zeitblöcke (Defaults anwendbar)
-- Tages-Status: geplant / eingetragen / halbtags / krank / Urlaub / frei / manuel
-- Farbcodierung passend zu deinem Excel-Sheet
-- "geplant → ✓-Button" um Block als real zu markieren
-- Wochen-Ist / Wochen-Soll / Δ Anzeige
-- Überstundensaldo in der Header-Leiste (Editieren in Settings kommt)
-- Settings-Screen für Sprache (DE/EN) und Tages-Soll
-- IndexedDB lokal (Dexie) — funktioniert offline
-- PWA: installierbar auf iOS/Android, Service Worker cached alles
-- i18n: Deutsch & Englisch (umschaltbar, persistent in localStorage)
+- Home-Stream: Heute ist oben voll ausgeklappt, vergangene Tage sind kompakte Zeilen
+- Inline-Bearbeitung der Zeitbloecke direkt in der Tageskarte, kein Modal
+- Zeitbloecke pro Tag: hinzufuegen, bearbeiten, loeschen
+- Pause wird implizit aus Luecken zwischen Bloecken berechnet
+- Tagesstatus statt Entry-Status: geplant, gearbeitet, halbtags, frei, Urlaub, krank
+- Auto-Promotion: Editieren oder Block hinzufuegen setzt geplante Tage automatisch auf gearbeitet
+- Lokale Datumsberechnung ohne `toISOString().slice(0, 10)`-Timezone-Bug
+- Lookback 7 / 14 / 30 Tage plus "aeltere Tage laden"
+- Wochenende optional einblendbar
+- Default-Bloecke pro Wochentag in Settings editierbar
+- Tages-Soll pro Wochentag in Settings editierbar
+- Theme: Auto / Hell / Dunkel
+- IndexedDB lokal via Dexie, offlinefaehig
+- PWA: installierbar, Service Worker, Manifest
+- i18n: Deutsch & Englisch
+- Docker-Setup fuer Production-nginx und Dev-Container
 
-## Was noch fehlt (Iteration 2+)
+## Was noch fehlt (Iteration 3+)
 
 - OneDrive / WebDAV-Sync
-- Excel-Import für 2026
-- Überstunden-Logik ("Neuzählen"-Toggle pro Woche, Saldo wird hochgezählt)
-- Statistik / Charts (Monatssummen, Überstunden-Verlauf, Krank-/Urlaubstage)
+- Excel-Import fuer 2026
+- Ueberstunden-Logik mit "Neuzaehlen"-Toggle
+- Statistik / Charts
 - Export als CSV / Excel / PDF
-- Settings: WebDAV-URL, User, Passwort UI (Felder schon da, Sync-Logik offen)
+- Cross-Tab-Sync
+- Cross-Midnight-Zeitbloecke
 
 ## Tech-Stack
 
 - Vite 8 + React 19 + TypeScript
-- Tailwind CSS 3 (Mobile-First)
-- Dexie.js 4 + dexie-react-hooks (IndexedDB + Reactive Query)
+- Tailwind CSS 3
+- Dexie.js 4 + dexie-react-hooks
 - React Router v7
 - i18next + react-i18next
-- date-fns (de, enUS locales)
-- vite-plugin-pwa (Workbox Service Worker)
-- xlsx (für späteren Excel-Import)
+- date-fns
+- vite-plugin-pwa / Workbox
+- nginx fuer das Production-Image
 
 ## Lokal starten
 
-### Variante 1: direkt mit Node (>= 22)
+### Direkt mit Node >= 22
 
 ```bash
 npm install
-npm run dev          # Dev-Server auf http://localhost:5173
-npm run build        # Production-Build nach dist/
-npm run preview      # Build lokal serven
+npm run dev
+npm run build
+npm run preview
 ```
 
-### Variante 2: Docker (kein Node nötig)
+Dev-Server: <http://localhost:5173>
 
-**Production** (statischer nginx-Container, fertig zum Deploy):
+### Docker / WSL
+
+Production-Container:
 
 ```bash
-docker compose up -d --build
-# → http://localhost:8080
+docker compose build
+docker compose up -d
 ```
 
-Stoppen & entfernen:
+App: <http://localhost:8080>
+
+Stoppen:
+
 ```bash
 docker compose down
 ```
 
-**Development** mit Live-Reload – Code in WSL/Windows bearbeiten,
-Vite rendert im Container neu:
+Dev-Container mit Vite Live-Reload:
 
 ```bash
-docker compose --profile dev up zeiterfassung-dev
-# → http://localhost:5173
+docker compose --profile dev up --build zeiterfassung-dev
 ```
 
-Nur das Production-Image bauen (ohne `docker compose`):
+Dev-App: <http://localhost:5173>
+
+Nur das Production-Image bauen:
+
 ```bash
 docker build --target prod -t zeiterfassung:latest .
 docker run --rm -p 8080:80 zeiterfassung:latest
 ```
 
-#### Was das Dockerfile macht
+### Docker-Aufbau
 
-- **Stage `dev`** – Node-22-Container mit installierten Deps, Vite dev server
-- **Stage `build`** – baut die App (`npm run build` → `dist/`)
-- **Stage `prod`** – nginx:alpine, legt `dist/` nach `/usr/share/nginx/html`,
-  mit SPA-Fallback, Cache-Strategien für Service Worker und gehashte Assets,
-  Security-Header
+- `dev`: Node-22-Container, installiert Dependencies per `npm ci`, startet Vite
+- `build`: installiert inklusive Dev-Dependencies, baut `dist/`
+- `prod`: nginx:alpine, serviert `dist/` mit SPA-Fallback und PWA-gerechten Cache-Headern
 
-Die Compose-Volumes im Dev-Modus mounten den Source-Code read-write, aber
-`node_modules` bleiben im Container (Windows-Mount ist mit Linux nicht
-kompatibel und würde sonst die Deps zerschießen).
+Im Dev-Profil werden Source-Dateien gemountet, `node_modules` bleiben im Linux-Container.
+Das vermeidet Windows/WSL-Inkompatibilitaeten bei nativen Dependencies.
 
-## Installation auf dem Handy
+## Datenmodell
 
-1. App deployen (z.B. Vercel, Netlify, eigener Webspace — siehe unten)
-2. URL im Mobile-Browser öffnen (Safari iOS / Chrome Android)
-3. "Zum Startbildschirm hinzufügen" / "Install" — danach startet die App als Vollbild-PWA
+### Entries
 
-## Deployment-Hinweise
+```ts
+interface Entry {
+  id?: number;
+  date: string;      // YYYY-MM-DD lokal erzeugt
+  order: number;
+  fromTime: string;  // HH:MM
+  toTime: string;    // HH:MM
+  updatedAt: number;
+}
+```
 
-Statisches Hosting reicht. Empfehlung:
-- **Vercel** (kostenlos, auto-Deploy bei Git-Push)
-- **Netlify** (ebenso kostenlos)
-- **Eigener Webspace** (Hetzner, All-Inkl, etc.) — `dist/` einfach hochladen
+### DayState
 
-Wichtig: der WebDAV-Sync wird direkt aus dem Browser gegen OneDrive sprechen. Dafür brauchen wir entweder CORS-fähigen OneDrive-Zugriff oder einen kleinen Relay-Endpoint. Iteration 2 klärt das.
+```ts
+type DayStatus = 'planned' | 'worked' | 'halfday' | 'free' | 'vacation' | 'sick';
+
+interface DayState {
+  date: string;
+  status: DayStatus;
+  updatedAt: number;
+}
+```
+
+### Settings
+
+```ts
+interface AppSettings {
+  id: 'app';
+  language: 'de' | 'en';
+  theme: 'auto' | 'light' | 'dark';
+  lookbackDays: 7 | 14 | 30;
+  dayTargets: { Mon: number; Tue: number; Wed: number; Thu: number; Fri: number; Sat: number; Sun: number };
+  defaultBlocks: Record<string, Array<{ from: string; to: string }>>;
+  showWeekend: boolean;
+  overtimeBalanceMinutes: number;
+  webdav: WebDavConfig;
+}
+```
+
+Legacy-Daten aus Iteration 1 werden ueber Dexie Schema v2 migriert: alte
+Entry-Statuswerte werden pro Datum zu `DayState.status` verdichtet. Alte
+Entry-Felder wie `breakMinutes`, `status` und `note` werden im neuen UI ignoriert.
 
 ## Projektstruktur
 
-```
+```text
 src/
-├── App.tsx                 # Routes
-├── main.tsx                # Bootstrap (BrowserRouter)
-├── styles.css              # Tailwind directives + components
+├── App.tsx
+├── main.tsx
+├── styles.css
 ├── components/
 │   ├── BottomNav.tsx
-│   ├── DayCard.tsx         # Tages-Ansicht mit Blöcken
-│   ├── EntryForm.tsx       # neuer Block hinzufügen
+│   ├── DayCard.tsx
+│   ├── DayListItem.tsx
 │   ├── StatusBadge.tsx
-│   ├── StatusPicker.tsx
-│   └── WeekView.tsx        # Wochen-Liste
+│   └── StatusMenu.tsx
 ├── pages/
 │   ├── HomePage.tsx
 │   ├── SettingsPage.tsx
 │   └── StatsPage.tsx
 ├── db/
-│   ├── database.ts         # Dexie-Schema + ensureSettings
+│   ├── database.ts
 │   └── types.ts
 ├── i18n/
-│   ├── index.ts            # i18next init, setLanguage()
+│   ├── index.ts
 │   ├── de.json
 │   └── en.json
 └── lib/
-    ├── dates.ts            # Wochen-/Datumshelper
-    └── format.ts           # HH:MM <-> Minuten
+    ├── dates.ts
+    ├── format.ts
+    └── theme.ts
 ```
 
-## Datenmodell
+## Bedienlogik
 
-**Entries** (Tabelle)
-```
-{
-  id, date (YYYY-MM-DD), order, fromTime, toTime,
-  breakMinutes, status, note?, updatedAt
-}
-```
+- Ein geplanter Tag zaehlt nicht ins Ist.
+- `gearbeitet` zaehlt die Summe der Bloecke als Ist.
+- `halbtags` reduziert das Soll auf 4 Stunden, Bloecke zaehlen normal.
+- `frei`, `Urlaub` und `krank` setzen Soll und Ist auf 0.
+- Bei `fromTime >= toTime` zaehlt der Block 0 Minuten und wird visuell markiert.
+- Cross-Midnight-Bloecke sind bewusst noch nicht unterstuetzt.
 
-**Settings** (Single Row, id='app')
-```
-{
-  language, dayTargets { Mon..Sun },
-  overtimeBalanceMinutes,
-  webdav { url, username, password, enabled, lastSyncAt, ... }
-}
-```
+## Deployment-Hinweise
 
-**Weeks** (Tabelle) — für Neuzählen-Logik
-```
-{ iso, countedForOvertime: 'yes' | 'no' | null, appliedAt }
-```
+Statisches Hosting reicht: `npm run build` erzeugt `dist/`. Fuer React-Router-Pfade
+braucht der Webserver einen SPA-Fallback auf `index.html`. Die mitgelieferte
+`nginx.conf` setzt diesen Fallback sowie passende Cache-Header fuer Service Worker,
+Manifest, Workbox und gehashte Assets.
 
-## Nächste Schritte
+## Naechste Schritte
 
-1. **Excel-Migration bauen** — wir parsen dein Excel-File und erzeugen ein JSON, das die App importiert (Iteration 2)
-2. **WebDAV-Sync** — OneDrive-Anbindung. Vorschlag: zuerst mit einer simplen `Basic`-Auth-Variante testen, dann OAuth-Layer draufsetzen wenn OneDrive das nicht nativ unterstützt
-3. **Neuzählen-Logik** — pro Woche ein Toggle; wenn "Ja", wird Differenz der Vorwoche zum Überstundensaldo addiert
-4. **UI-Politur** — Tags-Defaults als Settings, Vorlagen pro Wochentag editierbar
-5. **Statistik** — Chart.js oder Recharts für Monatsansicht, Urlaubstage-Zähler, Krankheitsquote
-
-Magst du die Iteration 1 anschauen (ich schicke dir den Code als ZIP unten) und mir sagen was du anders haben willst? Insbesondere: klappt die Wochen-Navigation, ist die Status-Auswahl am Handy bedienbar, soll noch was an die UI?
+1. WebDAV/OneDrive-Sync mit Konfliktstrategie
+2. Excel-Import fuer Bestandsdaten
+3. Ueberstunden-Saldo und Wochen-Neuzaehlung
+4. Statistiken und Monatsauswertung
+5. Exportformate
