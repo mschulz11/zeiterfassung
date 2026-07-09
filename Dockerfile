@@ -50,7 +50,7 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 # Tiny healthcheck – nginx reicht aus, der Service Worker & PWA-Shell
 # werden clientseitig getestet.
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
-  CMD wget -qO- http://localhost/ >/dev/null 2>&1 || exit 1
+  CMD wget -qO /dev/null http://127.0.0.1/healthz || exit 1
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
