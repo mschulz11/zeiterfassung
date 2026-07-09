@@ -33,44 +33,43 @@ export function parseExcelFile(buffer: ArrayBuffer): ImportedDay[] {
     const sheet = workbook.Sheets[sheetName];
     if (!sheet || !sheet['!ref']) continue;
 
-    const range = XLSX.utils.decode_range(sheet['!ref']);
     const year = extractYear(sheetName);
+    const range = XLSX.utils.decode_range(sheet['!ref']);
     console.log('[Import] Sheet:', sheetName, 'year:', year, 'rows:', range.e.r - range.s.r + 1);
     if (year === null) continue;
 
     let currentDay: ImportedDay | null = null;
 
-    // Debug: dump first 30 non-empty column-D values to understand structure
-    let debugDump = 0;
-    for (let row = range.s.r; row <= range.e.r && debugDump < 30; row++) {
-      const colD = readCellText(sheet, row, 3);
-      if (colD) {
-        const cell = sheet[XLSX.utils.encode_cell({ r: row, c: 3 })];
-        console.log(`[Import] row ${row} colD:`, JSON.stringify(colD), 'type:', cell?.t, 'raw v:', cell?.v);
-        debugDump++;
-      }
-    }
-
     for (let row = range.s.r; row <= range.e.r; row += 1) {
+      const cellD = readCell(sheet, row, 3);
+
+      // Column D contains Excel date serial numbers for day-header rows
+      if (cellD && cellD.t === 'n' && typeof cellD.v === 'number' && cellD.v > 100 && cellD.v < 100_000) {
+        const dateStr = serialToDateString(cellD.v);
+
+        // Each day has 3 header rows with the same serial — only start new day when date changes
+        if (dateStr !== currentDay?.date) {
+          if (currentDay) parsedDays.push(finalizeDay(currentDay));
+          currentDay = { date: dateStr, status: 'imported', entries: [] };
+          console.log('[Import] Day found:', dateStr);
+        }
+        continue; // date-header rows never contain Von/Bis
+      }
+
+      if (!currentDay) continue;
+
       const scanText = [0, 1, 2, 3]
         .map((column) => readCellText(sheet, row, column))
         .filter(Boolean)
         .join(' ');
       if (shouldSkipRow(scanText)) continue;
 
-      const headerText = readCellText(sheet, row, 3);
-      const dayDate = parseDateHeader(headerText, year);
-      if (dayDate) {
-        console.log('[Import] Day found:', dayDate, 'from cell:', headerText);
-        if (currentDay) parsedDays.push(finalizeDay(currentDay));
-        currentDay = { date: dayDate, status: 'imported', entries: [] };
-      }
-
-      if (!currentDay) continue;
-
-      const mappedStatus = mapStatus(readCellText(sheet, row, 10));
-      if (currentDay.status === 'imported' || mappedStatus !== 'imported') {
-        currentDay.status = mappedStatus;
+      const statusText = readCellText(sheet, row, 10);
+      if (statusText) {
+        const mapped = mapStatus(statusText);
+        if (currentDay.status === 'imported' || mapped !== 'imported') {
+          currentDay.status = mapped;
+        }
       }
 
       const fromTime = parseTimeCell(sheet, row, 4);
@@ -86,6 +85,15 @@ export function parseExcelFile(buffer: ArrayBuffer): ImportedDay[] {
 
   console.log('[Import] Total days parsed:', parsedDays.length);
   return mergeDuplicateDays(parsedDays).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function serialToDateString(serial: number): string {
+  // Excel epoch: Dec 30, 1899 (compensates for Excel's fake Feb 29, 1900 bug)
+  const date = new Date(Date.UTC(1899, 11, 30) + serial * 86_400_000);
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 function extractYear(sheetName: string): number | null {
