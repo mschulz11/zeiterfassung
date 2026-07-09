@@ -40,6 +40,17 @@ export function parseExcelFile(buffer: ArrayBuffer): ImportedDay[] {
 
     let currentDay: ImportedDay | null = null;
 
+    // Debug: dump first 30 non-empty column-D values to understand structure
+    let debugDump = 0;
+    for (let row = range.s.r; row <= range.e.r && debugDump < 30; row++) {
+      const colD = readCellText(sheet, row, 3);
+      if (colD) {
+        const cell = sheet[XLSX.utils.encode_cell({ r: row, c: 3 })];
+        console.log(`[Import] row ${row} colD:`, JSON.stringify(colD), 'type:', cell?.t, 'raw v:', cell?.v);
+        debugDump++;
+      }
+    }
+
     for (let row = range.s.r; row <= range.e.r; row += 1) {
       const scanText = [0, 1, 2, 3]
         .map((column) => readCellText(sheet, row, column))
