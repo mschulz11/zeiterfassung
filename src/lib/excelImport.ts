@@ -48,7 +48,7 @@ export function parseExcelFile(buffer: ArrayBuffer): ImportedDay[] {
         const dateStr = serialToDateString(cellD.v);
 
         // Each day has 3 header rows with the same serial — only start new day when date changes
-        if (dateStr !== currentDay?.date) {
+        if (currentDay === null || currentDay.date !== dateStr) {
           if (currentDay) parsedDays.push(finalizeDay(currentDay));
           currentDay = { date: dateStr, status: 'imported', entries: [] };
           console.log('[Import] Day found:', dateStr);
@@ -144,18 +144,6 @@ function excelNumberToTime(value: number): string {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-}
-
-function parseDateHeader(value: string, year: number): string | null {
-  if (!WEEKDAY_PATTERN.test(value)) return null;
-  const match = value.match(/(\d{1,2})\.\s*([A-Za-zÄÖÜäöüß]+)/);
-  if (!match) return null;
-
-  const day = Number(match[1]);
-  const month = MONTHS[normalizeToken(match[2])];
-  if (!month || Number.isNaN(day)) return null;
-
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 function shouldSkipRow(value: string): boolean {
