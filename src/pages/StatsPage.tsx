@@ -97,10 +97,6 @@ export function StatsPage() {
   const entriesByDate = useMemo(() => groupEntriesByDate(entries as Entry[]), [entries]);
   const dayStateByDate = useMemo(() => new Map((dayStates as DayState[]).map((state) => [state.date, state])), [dayStates]);
 
-  if (!settings) {
-    return <div className="p-4 text-[var(--text-muted)]">…</div>;
-  }
-
   function statusFor(date: string): DayStatus {
     const weekday = weekdayKey(fromIsoDate(date));
     if (!dayStateByDate.get(date) && (weekday === 'Sat' || weekday === 'Sun')) return 'free';
@@ -165,6 +161,10 @@ export function StatsPage() {
       { actualMinutes: 0, targetMinutes: 0, deltaMinutes: 0 },
     );
   }, [dayRows, monthRows, periodType]);
+
+  if (!settings) {
+    return <div className="p-4 text-[var(--text-muted)]">…</div>;
+  }
 
   const canGoNext = offset > 0;
 
