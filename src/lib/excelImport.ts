@@ -12,7 +12,8 @@ const HEADER_SKIP_TOKENS = ['neuzählen', 'für die firma', 'gesamt', 'wochentag
 export function parseExcelFile(buffer: ArrayBuffer): ImportedDay[] {
   const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array', cellDates: false, raw: true });
   const parsedDays: ImportedDay[] = [];
-  console.log('[Import] Starting parse, sheets:', workbook.SheetNames);
+  const use1904 = !!(workbook.Workbook?.WBProps as Record<string, unknown> | undefined)?.date1904;
+  console.log('[Import] Starting parse, sheets:', workbook.SheetNames, 'date1904:', use1904);
 
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
@@ -30,7 +31,7 @@ export function parseExcelFile(buffer: ArrayBuffer): ImportedDay[] {
 
       // Column D contains Excel date serial numbers for day-header rows
       if (cellD && cellD.t === 'n' && typeof cellD.v === 'number' && cellD.v > 100 && cellD.v < 100_000) {
-        const dateStr = serialToDateString(cellD.v);
+        const dateStr = serialToDateString(cellD.v, use1904);
 
         // Each day has 3 header rows with the same serial — only start new day when date changes
         if (currentDay === null || currentDay.date !== dateStr) {
@@ -72,9 +73,13 @@ export function parseExcelFile(buffer: ArrayBuffer): ImportedDay[] {
   return mergeDuplicateDays(parsedDays).sort((a, b) => a.date.localeCompare(b.date));
 }
 
-function serialToDateString(serial: number): string {
-  // Excel epoch: Dec 30, 1899 (compensates for Excel's fake Feb 29, 1900 bug)
-  const date = new Date(Date.UTC(1899, 11, 30) + serial * 86_400_000);
+function serialToDateString(serial: number, use1904: boolean): string {
+  // 1904 system (Mac Excel, supports negative times): epoch = Jan 1, 1904
+  // 1900 system (Windows Excel default): epoch = Dec 30, 1899 (compensates for fake Feb 29, 1900)
+  const epochMs = use1904
+    ? Date.UTC(1904, 0, 1)
+    : Date.UTC(1899, 11, 30);
+  const date = new Date(epochMs + serial * 86_400_000);
   const y = date.getUTCFullYear();
   const m = String(date.getUTCMonth() + 1).padStart(2, '0');
   const d = String(date.getUTCDate()).padStart(2, '0');
