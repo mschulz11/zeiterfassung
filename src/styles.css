@@ -3,12 +3,17 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+  :root,
+  .theme-daylight {
     --bg-page: #f8fafc;
     --bg-card: #ffffff;
+    --bg-soft: #f1f5f9;
+    --bg-edit: #f8fafc;
     --text-primary: #0f172a;
     --text-muted: #64748b;
     --border: #e2e8f0;
+    --accent: #2563eb;
+    --accent-text: #ffffff;
     --status-planned: #facc15;
     --status-worked: #ffffff;
     --status-halfday: #fde68a;
@@ -16,18 +21,73 @@
     --status-vacation: #93c5fd;
     --status-sick: #fca5a5;
   }
-  .dark {
-    --bg-page: #0f172a;
-    --bg-card: #1e293b;
-    --text-primary: #f1f5f9;
-    --text-muted: #94a3b8;
-    --border: #334155;
-    --status-planned: #ca8a04;
-    --status-worked: #1e293b;
-    --status-halfday: #a16207;
-    --status-free: #475569;
-    --status-vacation: #1d4ed8;
-    --status-sick: #b91c1c;
+  .theme-sand {
+    --bg-page: #f6f1e7;
+    --bg-card: #fffbf2;
+    --bg-soft: #efe5d1;
+    --bg-edit: #fbf3df;
+    --text-primary: #2d2116;
+    --text-muted: #7a6045;
+    --border: #dcc9aa;
+    --accent: #b45309;
+    --accent-text: #ffffff;
+    --status-planned: #f5c542;
+    --status-worked: #fffbf2;
+    --status-halfday: #e8b85b;
+    --status-free: #e7dcc8;
+    --status-vacation: #8bb9c9;
+    --status-sick: #d36b5f;
+  }
+  .theme-slate {
+    --bg-page: #e7edf3;
+    --bg-card: #f8fafc;
+    --bg-soft: #dbe4ed;
+    --bg-edit: #eef3f8;
+    --text-primary: #111827;
+    --text-muted: #526173;
+    --border: #c7d2df;
+    --accent: #475569;
+    --accent-text: #ffffff;
+    --status-planned: #d9a62e;
+    --status-worked: #f8fafc;
+    --status-halfday: #e2c06d;
+    --status-free: #d1d9e2;
+    --status-vacation: #6096c7;
+    --status-sick: #c75f6a;
+  }
+  .theme-indigo {
+    --bg-page: #1e2448; /* darker page background */
+    --bg-card: #272e55; /* slightly lighter card */
+    --bg-soft: #253050; /* soft area */
+    --bg-edit: #2f3760; /* edit area */
+    --text-primary: #eef5ff; /* light text */
+    --text-muted: #bfcde8; /* muted */
+    --border: #3b446e; /* subtle border */
+    --accent: #7fb3ff; /* toned-down accent */
+    --accent-text: #07122b; /* accent text dark */
+    --status-planned: #eab308;
+    --status-worked: #2b3358;
+    --status-halfday: #c0842e;
+    --status-free: #4f5b83;
+    --status-vacation: #3b82f6;
+    --status-sick: #dc6666;
+  }
+  .theme-midnight {
+    --bg-page: #111827;
+    --bg-card: #1f2937;
+    --bg-soft: #172033;
+    --bg-edit: #253244;
+    --text-primary: #f9fafb;
+    --text-muted: #cbd5e1;
+    --border: #3f4b5e;
+    --accent: #38bdf8;
+    --accent-text: #082f49;
+    --status-planned: #d99b16;
+    --status-worked: #1f2937;
+    --status-halfday: #a96b21;
+    --status-free: #4b5563;
+    --status-vacation: #2563eb;
+    --status-sick: #be4444;
   }
   html, body, #root {
     height: 100%;
@@ -54,10 +114,19 @@
            text-sm font-medium active:opacity-70 transition;
   }
   .btn-primary {
-    @apply bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-950;
+    background: var(--accent);
+    color: var(--accent-text);
   }
   .btn-ghost {
-    @apply text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700;
+    color: var(--text-primary);
+  }
+  .btn-ghost:hover {
+    background: var(--bg-soft);
+  }
+
+  /* Allow DaisyUI to style buttons/cards when plugin active */
+  :root[data-theme] .card, :root .card {
+    /* prefer CSS variable approach but allow daisyUI fallbacks */
   }
   .btn-danger {
     @apply bg-red-500 text-white;
@@ -66,8 +135,10 @@
     @apply inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium;
   }
   .input {
-    @apply w-full px-3 py-2 rounded-lg border border-slate-300 bg-white
-           focus:outline-none focus:ring-2 focus:ring-slate-400
-           dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100;
+    @apply w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    --tw-ring-color: color-mix(in srgb, var(--accent) 55%, transparent);
   }
 }

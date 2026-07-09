@@ -4,6 +4,7 @@ import { blockMinutes, computeBreakMinutes, entriesDurationMinutes, minutesToHHM
 import clsx from 'clsx';
 import { formatDateLong } from '../lib/dates';
 import { StatusMenu } from './StatusMenu';
+import { TimeInput } from './TimeInput';
 
 interface Props {
   date: string;
@@ -34,13 +35,13 @@ export function DayCard({
 }: Props) {
   const { t } = useTranslation();
   const inactive = ['free', 'vacation', 'sick'].includes(status);
-  const effectiveTarget = status === 'halfday' ? 240 : inactive ? 0 : targetMinutes;
+  const effectiveTarget = status === 'halfday' ? Math.round(targetMinutes / 2) : inactive ? 0 : targetMinutes;
   const actualMinutes = inactive || status === 'planned' ? 0 : entriesDurationMinutes(entries);
   const pauseMinutes = inactive ? 0 : computeBreakMinutes(entries);
 
   return (
     <div className="overflow-visible rounded-lg border border-[var(--border)] bg-[var(--bg-card)] shadow-sm">
-      <div className="flex items-start justify-between gap-3 px-3 pt-3">
+      <div className="flex items-start justify-between gap-3 rounded-t-lg border-b border-[var(--border)] bg-[var(--bg-soft)] px-3 py-3">
         <div>
           <div className="text-xs font-semibold uppercase text-[var(--text-muted)]">
             {variant === 'today' ? t('today') : t('dayLabel')}
@@ -52,7 +53,7 @@ export function DayCard({
         <StatusMenu value={status} onChange={onStatusChange} />
       </div>
 
-      <div className={clsx('space-y-2 px-3 py-3', inactive && 'opacity-55')}>
+      <div className={clsx('space-y-2 bg-[var(--bg-edit)] px-3 py-3', inactive && 'opacity-55')}>
         {entries.length === 0 && (
           <div className="rounded-lg border border-dashed border-[var(--border)] px-3 py-4 text-sm text-[var(--text-muted)]">
             {t('noEntries')}
@@ -60,20 +61,17 @@ export function DayCard({
         )}
         {entries.map((e) => (
           <div key={e.id} className="grid grid-cols-[1fr_auto_1fr_auto] items-center gap-2">
-            <input
-              type="time"
+            <TimeInput
               value={e.fromTime}
               disabled={inactive}
-              onChange={(event) => event.target.value && onUpdateBlock(e.id!, { fromTime: event.target.value })}
-              className="input font-mono"
+              onCommit={(value) => onUpdateBlock(e.id!, { fromTime: value })}
             />
             <span className="text-[var(--text-muted)]">-</span>
-            <input
-              type="time"
+            <TimeInput
               value={e.toTime}
               disabled={inactive}
-              onChange={(event) => event.target.value && onUpdateBlock(e.id!, { toTime: event.target.value })}
-              className={clsx('input font-mono', blockMinutes(e) === 0 && !inactive && 'border-red-400')}
+              invalid={blockMinutes(e) === 0 && !inactive}
+              onCommit={(value) => onUpdateBlock(e.id!, { toTime: value })}
             />
             <button
               type="button"

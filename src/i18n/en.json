@@ -37,6 +37,7 @@
   "enterDay": "Enter",
   "loadOlderDays": "Load older days",
   "showWeekend": "Show weekend",
+  "hideWeekend": "Hide Weekend",
   "day": {
     "Mon": "Mon",
     "Tue": "Tue",
@@ -66,11 +67,18 @@
   "theme": {
     "auto": "Auto",
     "light": "Light",
-    "dark": "Dark"
+    "dark": "Dark",
+    "daylight": "Daylight",
+    "sand": "Sand",
+    "slate": "Slate",
+    "indigo": "Indigo",
+    "midnight": "Midnight"
   },
   "settings.heading": "Settings",
   "settings.theme": "Theme",
   "settings.lookback": "Range (days)",
+  "settings.weeklyTarget": "Weekly target (hours)",
+  "settings.lookbackFree": "Range (free)" ,
   "settings.weekend": "Show weekend",
   "settings.defaultBlocks": "Default blocks",
   "settings.noDefaultBlocks": "No default blocks",
@@ -85,5 +93,6 @@
   "msg.entrySaved": "Entry saved",
   "msg.entryDeleted": "Entry deleted",
   "msg.defaultsApplied": "Defaults applied",
-  "msg.confirmDelete": "Really delete this entry?"
+  "msg.confirmDelete": "Really delete this entry?",
+  "yearBalance": "Year balance"
 }

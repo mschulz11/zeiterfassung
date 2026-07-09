@@ -16,9 +16,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const theme = settings?.theme ?? 'auto';
-    applyTheme(theme);
-    return watchAutoTheme(theme, () => applyTheme(theme));
+    // only daylight supported now; ensure theme applied
+    applyTheme();
+    return watchAutoTheme();
   }, [settings?.theme]);
 
   return (

@@ -54,8 +54,9 @@ export interface WebDavConfig {
 export interface AppSettings {
   id: 'app';
   language: 'de' | 'en';
-  theme: 'auto' | 'light' | 'dark';
-  lookbackDays: 7 | 14 | 30;
+  theme: 'daylight' | 'sand' | 'slate' | 'indigo' | 'midnight';
+  lookbackDays: number;
+  weeklyTargetMinutes: number;
   dayTargets: DayTargets;
   defaultBlocks: DefaultBlocks;
   showWeekend: boolean;

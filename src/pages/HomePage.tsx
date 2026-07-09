@@ -3,11 +3,12 @@ import { db } from '../db/database';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useTranslation } from 'react-i18next';
 import { hhmmToMinutes, minutesToHHMM, minutesToTime } from '../lib/format';
-import { addDays } from 'date-fns';
+import { addDays, startOfYear } from 'date-fns';
 import { fromIsoDate, toIsoDate, weekdayKey } from '../lib/dates';
 import type { AppSettings, DayState, DayStatus, Entry } from '../db/types';
 import { DayCard } from '../components/DayCard';
 import { DayListItem } from '../components/DayListItem';
+import { actualMinutesForStatus, deltaMinutesForDay, effectiveTargetMinutes, targetMinutesForDate } from '../lib/dayTotals';
 
 const BLOCKING_STATUSES: DayStatus[] = ['free', 'vacation', 'sick', 'halfday'];
 
@@ -17,6 +18,7 @@ export function HomePage() {
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
   const settings = useLiveQuery(() => db.settings.get('app'), []);
   const today = toIsoDate(new Date());
+  const yearStart = toIsoDate(startOfYear(new Date()));
 
   const { startDate, dayDates } = useMemo(() => {
     const lookbackDays = settings?.lookbackDays ?? 14;
@@ -39,6 +41,16 @@ export function HomePage() {
     [startDate, today],
   ) ?? [];
 
+  const yearEntries = useLiveQuery(
+    () => db.entries.where('date').between(yearStart, today, true, true).toArray(),
+    [yearStart, today],
+  ) ?? [];
+
+  const yearDayStates = useLiveQuery(
+    () => db.dayState.where('date').between(yearStart, today, true, true).toArray(),
+    [yearStart, today],
+  ) ?? [];
+
   const dayStateByDate = useMemo(() => {
     return new Map((dayStates as DayState[]).map((state) => [state.date, state]));
   }, [dayStates]);
@@ -54,6 +66,21 @@ export function HomePage() {
     return grouped;
   }, [entries]);
 
+  const yearEntriesByDate = useMemo(() => {
+    const grouped = new Map<string, Entry[]>();
+    for (const entry of yearEntries as Entry[]) {
+      const list = grouped.get(entry.date) ?? [];
+      list.push(entry);
+      grouped.set(entry.date, list);
+    }
+    for (const list of grouped.values()) list.sort((a, b) => a.order - b.order);
+    return grouped;
+  }, [yearEntries]);
+
+  const yearDayStateByDate = useMemo(() => {
+    return new Map((yearDayStates as DayState[]).map((state) => [state.date, state]));
+  }, [yearDayStates]);
+
   useEffect(() => {
     if (!settings) return;
     const activeSettings = settings;
@@ -64,7 +91,11 @@ export function HomePage() {
         if (cancelled) return;
         const day = weekdayKey(fromIsoDate(date));
         const blocks = activeSettings.defaultBlocks[day] ?? [];
-        if (blocks.length === 0 || (activeSettings.dayTargets[day] ?? 0) === 0) continue;
+        if ((day === 'Sat' || day === 'Sun') && !dayStateByDate.get(date)) {
+          await db.dayState.put({ date, status: 'free', updatedAt: Date.now() });
+          continue;
+        }
+        if (blocks.length === 0 || targetMinutesForDate(date, activeSettings) === 0) continue;
         if (entriesByDate.get(date)?.length) continue;
         const existingState = dayStateByDate.get(date);
         if (existingState && BLOCKING_STATUSES.includes(existingState.status)) continue;
@@ -97,15 +128,19 @@ export function HomePage() {
   const activeSettings = settings;
 
   function statusFor(date: string): DayStatus {
+    const day = weekdayKey(fromIsoDate(date));
+    if (!dayStateByDate.get(date) && (day === 'Sat' || day === 'Sun')) return 'free';
     return dayStateByDate.get(date)?.status ?? 'planned';
   }
 
   function targetFor(date: string): number {
-    return activeSettings.dayTargets[weekdayKey(fromIsoDate(date))] ?? 0;
+    return targetMinutesForDate(date, activeSettings);
   }
 
   function isVisible(date: string): boolean {
-    return activeSettings.showWeekend || targetFor(date) > 0 || Boolean(entriesByDate.get(date)?.length);
+    const day = weekdayKey(fromIsoDate(date));
+    const weekend = day === 'Sat' || day === 'Sun';
+    return activeSettings.showWeekend || !weekend || Boolean(entriesByDate.get(date)?.length);
   }
 
   async function setStatus(date: string, status: DayStatus) {
@@ -166,15 +201,32 @@ export function HomePage() {
 
   const visibleDates = dayDates.filter(isVisible);
   const pastDates = visibleDates.filter((date) => date !== today);
-  const balance = activeSettings.overtimeBalanceMinutes;
+  const balance = visibleDates.reduce((sum, date) => {
+    return sum + deltaMinutesForDay(date, entriesByDate.get(date) ?? [], statusFor(date), activeSettings);
+  }, 0);
+  const yearBalance = (() => {
+    let sum = 0;
+    for (let cursor = fromIsoDate(yearStart); toIsoDate(cursor) <= today; cursor = addDays(cursor, 1)) {
+      const date = toIsoDate(cursor);
+      const state = yearDayStateByDate.get(date)?.status
+        ?? (['Sat', 'Sun'].includes(weekdayKey(fromIsoDate(date))) ? 'free' : 'planned');
+      sum += deltaMinutesForDay(date, yearEntriesByDate.get(date) ?? [], state, activeSettings);
+    }
+    return sum;
+  })();
 
   return (
     <div className="pb-4">
       <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--bg-page)]/95 backdrop-blur">
         <div className="max-w-xl mx-auto px-3 py-3 flex items-center justify-between">
           <h1 className="text-lg font-semibold">{t('appName')}</h1>
-          <div className={balance < 0 ? 'text-xs font-mono text-red-600 dark:text-red-300' : 'text-xs font-mono text-[var(--text-muted)]'}>
-            {t('balance')}: {minutesToHHMM(balance)}
+          <div className="text-right text-xs font-mono">
+            <div className={balance < 0 ? 'text-red-600 dark:text-red-300' : 'text-[var(--text-muted)]'}>
+              {t('balance')}: {minutesToHHMM(balance)}
+            </div>
+            <div className={yearBalance < 0 ? 'text-red-600 dark:text-red-300' : 'text-[var(--text-muted)]'}>
+              {t('yearBalance')}: {minutesToHHMM(yearBalance)}
+            </div>
           </div>
         </div>
       </header>
@@ -192,6 +244,9 @@ export function HomePage() {
                   status={statusFor(date)}
                   language={activeSettings.language}
                   expanded={expanded}
+                  targetMinutes={effectiveTargetMinutes(date, statusFor(date), activeSettings)}
+                  actualMinutes={actualMinutesForStatus(entriesByDate.get(date) ?? [], statusFor(date))}
+                  deltaMinutes={deltaMinutesForDay(date, entriesByDate.get(date) ?? [], statusFor(date), activeSettings)}
                   onClick={() => {
                     setExpandedDates((current) => {
                       const next = new Set(current);
@@ -207,15 +262,13 @@ export function HomePage() {
           })}
         </div>
 
-        {!activeSettings.showWeekend && (
-          <button
-            type="button"
-            onClick={() => void db.settings.update('app', { showWeekend: true } satisfies Partial<AppSettings>)}
-            className="btn btn-ghost w-full border border-dashed border-[var(--border)]"
-          >
-            + {t('showWeekend')}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => void db.settings.update('app', { showWeekend: !activeSettings.showWeekend } satisfies Partial<AppSettings>)}
+          className="btn btn-ghost w-full border border-dashed border-[var(--border)]"
+        >
+          {activeSettings.showWeekend ? t('hideWeekend') : `+ ${t('showWeekend')}`}
+        </button>
 
         <button
           type="button"

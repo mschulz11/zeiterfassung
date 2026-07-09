@@ -35,9 +35,7 @@ class ZeiterfassungDB extends Dexie {
       for (const entry of legacyEntries as Array<{ date?: string; status?: string }>) {
         if (!entry.date) continue;
         let mapped: DayStatus = 'planned';
-        switch (entry.status) {
-          case 'manuel':
-          case 'manual':
+        switch (entry.status) { 
           case 'entered':
             mapped = 'worked';
             break;
@@ -108,8 +106,9 @@ function defaultSettings(): AppSettings {
   return {
     id: 'app',
     language: 'de',
-    theme: 'auto',
+    theme: 'daylight',
     lookbackDays: 14,
+    weeklyTargetMinutes: 2400,
     dayTargets: DEFAULT_DAY_TARGETS,
     defaultBlocks: DEFAULT_BLOCKS,
     showWeekend: false,
@@ -130,10 +129,22 @@ function withSettingsDefaults(settings: Partial<AppSettings>): AppSettings {
   return {
     ...defaults,
     ...settings,
+    theme: normalizeTheme(settings.theme),
+    lookbackDays: Math.max(1, Number(settings.lookbackDays) || defaults.lookbackDays),
+    weeklyTargetMinutes: Number(settings.weeklyTargetMinutes ?? 2400),
     dayTargets: { ...defaults.dayTargets, ...settings.dayTargets },
     defaultBlocks: { ...defaults.defaultBlocks, ...settings.defaultBlocks },
     webdav: { ...defaults.webdav, ...settings.webdav },
   };
+}
+
+function normalizeTheme(theme: unknown): AppSettings['theme'] {
+  if (theme === 'dark') return 'midnight';
+  if (theme === 'light' || theme === 'auto') return 'daylight';
+  if (theme === 'daylight' || theme === 'sand' || theme === 'slate' || theme === 'indigo' || theme === 'midnight') {
+    return theme;
+  }
+  return 'daylight';
 }
 
 // Default-Settings beim ersten Start anlegen und neue Felder defensiv ergänzen.
