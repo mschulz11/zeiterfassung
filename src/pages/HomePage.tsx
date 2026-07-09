@@ -236,7 +236,7 @@ export function HomePage() {
         onStatusChange={(status) => void setStatus(date, status)}
         onPromote={() => void setStatus(date, 'worked')}
         onSetBalanceStart={() => void setBalanceStart(date)}
-        isBalanceStart={activeSettings.balanceStartDates?.includes(date) ?? false}
+        isBalanceStart={activeSettings!.balanceStartDates?.includes(date) ?? false}
       />
     );
   }
@@ -311,7 +311,7 @@ export function HomePage() {
                   actualMinutes={actualMinutesForStatus(entriesByDate.get(date) ?? [], statusFor(date))}
                   deltaMinutes={deltaMinutesForDay(date, entriesByDate.get(date) ?? [], statusFor(date), activeSettings)}
                   cumulativeBalance={cumulativeBalanceByDate.get(date)}
-                  isBalanceStart={activeSettings.balanceStartDates?.includes(date) ?? false}
+                  isBalanceStart={activeSettings!.balanceStartDates?.includes(date) ?? false}
                   onClick={() => {
                     setExpandedDates((current) => {
                       const next = new Set(current);
