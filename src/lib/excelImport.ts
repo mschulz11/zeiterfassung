@@ -25,15 +25,19 @@ const MONTHS: Record<string, number> = {
 };
 
 export function parseExcelFile(buffer: ArrayBuffer): ImportedDay[] {
-  const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+  const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array', cellDates: false, raw: true });
   const parsedDays: ImportedDay[] = [];
+  console.log('[Import] Starting parse, sheets:', workbook.SheetNames);
 
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
-    const year = extractYear(sheetName);
-    if (!sheet || !sheet['!ref'] || year === null) continue;
+    if (!sheet || !sheet['!ref']) continue;
 
     const range = XLSX.utils.decode_range(sheet['!ref']);
+    const year = extractYear(sheetName);
+    console.log('[Import] Sheet:', sheetName, 'year:', year, 'rows:', range.e.r - range.s.r + 1);
+    if (year === null) continue;
+
     let currentDay: ImportedDay | null = null;
 
     for (let row = range.s.r; row <= range.e.r; row += 1) {
@@ -46,6 +50,7 @@ export function parseExcelFile(buffer: ArrayBuffer): ImportedDay[] {
       const headerText = readCellText(sheet, row, 3);
       const dayDate = parseDateHeader(headerText, year);
       if (dayDate) {
+        console.log('[Import] Day found:', dayDate, 'from cell:', headerText);
         if (currentDay) parsedDays.push(finalizeDay(currentDay));
         currentDay = { date: dayDate, status: 'imported', entries: [] };
       }
@@ -60,6 +65,7 @@ export function parseExcelFile(buffer: ArrayBuffer): ImportedDay[] {
       const fromTime = parseTimeCell(sheet, row, 4);
       const toTime = parseTimeCell(sheet, row, 5);
       if (fromTime && toTime) {
+        console.log('[Import] Block:', fromTime, '-', toTime);
         currentDay.entries.push({ fromTime, toTime });
       }
     }
@@ -67,6 +73,7 @@ export function parseExcelFile(buffer: ArrayBuffer): ImportedDay[] {
     if (currentDay) parsedDays.push(finalizeDay(currentDay));
   }
 
+  console.log('[Import] Total days parsed:', parsedDays.length);
   return mergeDuplicateDays(parsedDays).sort((a, b) => a.date.localeCompare(b.date));
 }
 
@@ -84,6 +91,7 @@ function readCellText(sheet: XLSX.WorkSheet, row: number, column: number): strin
   if (!cell) return '';
   if (typeof cell.w === 'string' && cell.w.trim()) return cell.w.trim();
   if (typeof cell.v === 'string' && cell.v.trim()) return cell.v.trim();
+  if (typeof cell.h === 'string' && cell.h.trim()) return cell.h.trim();
   if (typeof cell.v === 'number') return String(cell.v);
   return '';
 }

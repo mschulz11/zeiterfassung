@@ -100,6 +100,7 @@
   "stats.month": "Monat",
   "stats.year": "Jahr",
   "stats.kw": "KW",
+  "stats.distribution": "Status-Verteilung",
   "stats.noData": "Keine Daten",
   "import.title": "Daten importieren",
   "import.chooseFile": "Excel-Datei auswählen",

@@ -83,6 +83,19 @@ class ZeiterfassungDB extends Dexie {
         await settingsTable.put(withSettingsDefaults(existing as Partial<AppSettings>));
       }
     });
+
+    this.version(4).stores({
+      entries: '++id, date, updatedAt',
+      dayState: '&date, status, updatedAt',
+      settings: 'id',
+      weeks: 'iso, countedForOvertime',
+    }).upgrade(async (tx) => {
+      const settingsTable = tx.table('settings');
+      const existing = await settingsTable.get('app');
+      if (existing) {
+        await settingsTable.put(withSettingsDefaults(existing as Partial<AppSettings>));
+      }
+    });
   }
 }
 
@@ -123,6 +136,7 @@ function defaultSettings(): AppSettings {
     theme: 'daylight',
     lookbackDays: 14,
     balanceStartDate: null,
+    balanceStartDates: [],
     balanceGiftMinutes: 0,
     weeklyTargetMinutes: 2400,
     dayTargets: DEFAULT_DAY_TARGETS,
@@ -142,12 +156,14 @@ function defaultSettings(): AppSettings {
 
 function withSettingsDefaults(settings: Partial<AppSettings>): AppSettings {
   const defaults = defaultSettings();
+  const allStartDates = normalizeBalanceStartDates(settings.balanceStartDates, settings.balanceStartDate);
   return {
     ...defaults,
     ...settings,
     theme: normalizeTheme(settings.theme),
     lookbackDays: Math.max(1, Number(settings.lookbackDays) || defaults.lookbackDays),
-    balanceStartDate: normalizeBalanceStartDate(settings.balanceStartDate),
+    balanceStartDate: allStartDates.at(-1) ?? null,
+    balanceStartDates: allStartDates,
     balanceGiftMinutes: Math.max(0, Number(settings.balanceGiftMinutes ?? 0)),
     weeklyTargetMinutes: Number(settings.weeklyTargetMinutes ?? 2400),
     dayTargets: { ...defaults.dayTargets, ...settings.dayTargets },
@@ -159,6 +175,15 @@ function withSettingsDefaults(settings: Partial<AppSettings>): AppSettings {
 function normalizeBalanceStartDate(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+}
+
+function normalizeBalanceStartDates(values: unknown, legacyValue: unknown): string[] {
+  const source = Array.isArray(values)
+    ? values
+    : (normalizeBalanceStartDate(legacyValue) ? [legacyValue] : []);
+  return source
+    .map((value) => normalizeBalanceStartDate(value))
+    .filter((value): value is string => value !== null);
 }
 
 function normalizeTheme(theme: unknown): AppSettings['theme'] {

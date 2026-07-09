@@ -149,11 +149,15 @@ export function HomePage() {
   }
 
   async function setBalanceStart(date: string) {
-    const currentGesamtsaldo = cumulativeBalanceByDate.get(today) ?? 0;
+    const dayBefore = toIsoDate(addDays(fromIsoDate(date), -1));
+    const balanceToAdd = cumulativeBalanceByDate.get(dayBefore) ?? 0;
     const currentGift = activeSettings!.balanceGiftMinutes ?? 0;
+    const currentDates = activeSettings!.balanceStartDates ?? [];
+    if (currentDates.at(-1) === date) return;
     await db.settings.update('app', {
       balanceStartDate: date,
-      balanceGiftMinutes: currentGift + currentGesamtsaldo,
+      balanceStartDates: [...currentDates, date],
+      balanceGiftMinutes: currentGift + balanceToAdd,
     } satisfies Partial<AppSettings>);
   }
 
@@ -190,19 +194,22 @@ export function HomePage() {
     await db.entries.delete(id);
   }
 
-  const { cumulativeBalanceByDate, gesamtIst, gesamtSoll } = useMemo(() => {
+  const { cumulativeBalanceByDate } = useMemo(() => {
     const cumulative = new Map<string, number>();
     if (!activeSettings || !balanceStartDate) return { cumulativeBalanceByDate: cumulative, gesamtIst: 0, gesamtSoll: 0 };
 
     let sum = 0, ist = 0, soll = 0;
     for (let cursor = fromIsoDate(balanceStartDate); toIsoDate(cursor) <= today; cursor = addDays(cursor, 1)) {
       const date = toIsoDate(cursor);
-      const status = balanceDayStateByDate.get(date)?.status
-        ?? (['Sat', 'Sun'].includes(weekdayKey(fromIsoDate(date))) ? 'free' : 'planned');
+      const state = balanceDayStateByDate.get(date);
+      if (!state || state.status === 'planned') {
+        cumulative.set(date, sum);
+        continue;
+      }
       const dayEntries = balanceEntriesByDate.get(date) ?? [];
-      ist += actualMinutesForStatus(dayEntries, status);
-      soll += effectiveTargetMinutes(date, status, activeSettings);
-      sum += deltaMinutesForDay(date, dayEntries, status, activeSettings);
+      ist += actualMinutesForStatus(dayEntries, state.status);
+      soll += effectiveTargetMinutes(date, state.status, activeSettings);
+      sum += deltaMinutesForDay(date, dayEntries, state.status, activeSettings);
       cumulative.set(date, sum);
     }
 
@@ -229,7 +236,7 @@ export function HomePage() {
         onStatusChange={(status) => void setStatus(date, status)}
         onPromote={() => void setStatus(date, 'worked')}
         onSetBalanceStart={() => void setBalanceStart(date)}
-        isBalanceStart={date === activeSettings!.balanceStartDate}
+        isBalanceStart={activeSettings.balanceStartDates?.includes(date) ?? false}
       />
     );
   }
@@ -254,17 +261,15 @@ export function HomePage() {
     let delta = 0, ist = 0, soll = 0;
     for (let cursor = fromIsoDate(yearStart); toIsoDate(cursor) <= today; cursor = addDays(cursor, 1)) {
       const date = toIsoDate(cursor);
-      const state = yearDayStateByDate.get(date)?.status
-        ?? (['Sat', 'Sun'].includes(weekdayKey(fromIsoDate(date))) ? 'free' : 'planned');
+      const state = yearDayStateByDate.get(date);
+      if (!state || state.status === 'planned') continue;
       const dayEntries = yearEntriesByDate.get(date) ?? [];
-      ist += actualMinutesForStatus(dayEntries, state);
-      soll += effectiveTargetMinutes(date, state, activeSettings);
-      delta += deltaMinutesForDay(date, dayEntries, state, activeSettings);
+      ist += actualMinutesForStatus(dayEntries, state.status);
+      soll += effectiveTargetMinutes(date, state.status, activeSettings);
+      delta += deltaMinutesForDay(date, dayEntries, state.status, activeSettings);
     }
     return { yearBalance: delta, yearIst: ist, yearSoll: soll };
   })();
-
-  const gesamtDelta = cumulativeBalanceByDate.get(today) ?? 0;
 
   return (
     <div className="pb-4">
@@ -276,14 +281,15 @@ export function HomePage() {
             <div className="text-[var(--text-muted)]">{t('actual')}</div>
             <div className="text-[var(--text-muted)]">{t('target')}</div>
             <div className="text-[var(--text-muted)]">Δ</div>
-            <BalanceRow label={t('period')} ist={periodIst} soll={periodSoll} delta={periodDelta} />
+            {balanceStartDate && (
+              <>
+                <div className="text-left text-[var(--text-muted)]">{t('gifted')}</div>
+                <div className="col-span-2 text-[var(--text-muted)]">{minutesToHHMM(activeSettings.balanceGiftMinutes)}</div>
+                <div></div>
+              </>
+            )}
             <BalanceRow label={t('year')} ist={yearIst} soll={yearSoll} delta={yearBalance} />
-            {balanceStartDate && <>
-              <BalanceRow label={t('overallTotal')} ist={gesamtIst} soll={gesamtSoll} delta={gesamtDelta} />
-              <div className="text-left text-[var(--text-muted)]">{t('gifted')}</div>
-              <div className="col-span-2 text-[var(--text-muted)]">{minutesToHHMM(activeSettings.balanceGiftMinutes)}</div>
-              <div></div>
-            </>}
+            <BalanceRow label={t('period')} ist={periodIst} soll={periodSoll} delta={periodDelta} />
           </div>
         </div>
       </header>
@@ -305,7 +311,7 @@ export function HomePage() {
                   actualMinutes={actualMinutesForStatus(entriesByDate.get(date) ?? [], statusFor(date))}
                   deltaMinutes={deltaMinutesForDay(date, entriesByDate.get(date) ?? [], statusFor(date), activeSettings)}
                   cumulativeBalance={cumulativeBalanceByDate.get(date)}
-                  isBalanceStart={date === activeSettings.balanceStartDate}
+                  isBalanceStart={activeSettings.balanceStartDates?.includes(date) ?? false}
                   onClick={() => {
                     setExpandedDates((current) => {
                       const next = new Set(current);

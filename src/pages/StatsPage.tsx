@@ -40,10 +40,24 @@ interface MonthRowData {
   deltaMinutes: number;
 }
 
+const STATUS_COLORS: Record<DayStatus, string> = {
+  worked: '#22c55e',
+  imported: '#a855f7',
+  halfday: '#eab308',
+  free: '#94a3b8',
+  vacation: '#3b82f6',
+  sick: '#ef4444',
+  planned: '#e2e8f0',
+};
+
 export function StatsPage() {
   const { t } = useTranslation();
   const [periodType, setPeriodType] = useState<PeriodType>('week');
   const [offset, setOffset] = useState(0);
+  const [showWeekend, setShowWeekend] = useState(false);
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<DayStatus>>(
+    () => new Set(['worked', 'imported', 'halfday', 'vacation', 'sick']),
+  );
   const settings = useLiveQuery(() => db.settings.get('app'), []);
 
   const locale = settings?.language === 'de' ? de : enUS;
@@ -121,6 +135,13 @@ export function StatsPage() {
     return rows;
   }, [dayStateByDate, endIso, entriesByDate, periodRange.start, settings]);
 
+  const displayedDayRows = showWeekend
+    ? dayRows
+    : dayRows.filter((row) => {
+      const wd = weekdayKey(fromIsoDate(row.date));
+      return wd !== 'Sat' && wd !== 'Sun';
+    });
+
   const monthRows = useMemo(() => {
     if (!settings || periodType !== 'year') return [];
 
@@ -162,6 +183,15 @@ export function StatsPage() {
     );
   }, [dayRows, monthRows, periodType]);
 
+  const statusCounts = useMemo(() => {
+    const counts: Partial<Record<DayStatus, number>> = {};
+    for (const row of dayRows) {
+      if (!selectedStatuses.has(row.status)) continue;
+      counts[row.status] = (counts[row.status] ?? 0) + 1;
+    }
+    return counts;
+  }, [dayRows, selectedStatuses]);
+
   if (!settings) {
     return <div className="p-4 text-[var(--text-muted)]">…</div>;
   }
@@ -201,6 +231,9 @@ export function StatsPage() {
             ›
           </button>
         </div>
+        <button type="button" onClick={() => setShowWeekend((value) => !value)} className="btn btn-ghost w-full border border-[var(--border)] text-xs">
+          {showWeekend ? t('hideWeekend') : `+ ${t('showWeekend')}`}
+        </button>
       </header>
 
       <section className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-3 py-3 shadow-sm">
@@ -240,16 +273,48 @@ export function StatsPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {dayRows.length === 0 && (
+          {displayedDayRows.length === 0 && (
             <div className="rounded-lg border border-dashed border-[var(--border)] px-3 py-4 text-sm text-[var(--text-muted)]">
               {t('stats.noData')}
             </div>
           )}
-          {dayRows.map((row) => (
+          {displayedDayRows.map((row) => (
             <StatsDayRow key={row.date} row={row} language={settings.language} />
           ))}
         </div>
       )}
+
+      <section className="space-y-3 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-3">
+        <h2 className="text-sm font-semibold">{t('stats.distribution')}</h2>
+        <div className="flex items-start gap-4">
+          <PieChart counts={statusCounts} colors={STATUS_COLORS} />
+          <div className="flex flex-1 flex-col gap-1.5">
+            {(Object.entries(STATUS_COLORS) as [DayStatus, string][])
+              .filter(([status]) => status !== 'planned')
+              .map(([status, color]) => (
+                <label key={status} className="flex cursor-pointer items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={selectedStatuses.has(status)}
+                    onChange={(event) => {
+                      setSelectedStatuses((previous) => {
+                        const next = new Set(previous);
+                        if (event.target.checked) next.add(status);
+                        else next.delete(status);
+                        return next;
+                      });
+                    }}
+                    className="h-3 w-3 rounded"
+                    style={{ accentColor: color }}
+                  />
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ background: color }} />
+                  <span className="text-[var(--text-primary)]">{t(`dayStatus.${status}`)}</span>
+                  <span className="ml-auto text-[var(--text-muted)]">{statusCounts[status] ?? 0}</span>
+                </label>
+              ))}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
@@ -288,4 +353,36 @@ function groupEntriesByDate(entries: Entry[]): Map<string, Entry[]> {
     list.sort((a, b) => a.order - b.order);
   }
   return grouped;
+}
+
+function PieChart({ counts, colors }: { counts: Partial<Record<DayStatus, number>>; colors: Record<DayStatus, string> }) {
+  const slices = (Object.entries(counts) as [DayStatus, number][]).filter(([, count]) => count > 0);
+  const total = slices.reduce((sum, [, count]) => sum + count, 0);
+  if (total === 0) return null;
+
+  const cx = 60;
+  const cy = 60;
+  const r = 55;
+  let angle = -Math.PI / 2;
+
+  return (
+    <svg viewBox="0 0 120 120" className="h-28 w-28">
+      {slices.map(([status, count]) => {
+        const sliceAngle = (count / total) * 2 * Math.PI;
+        const x1 = cx + r * Math.cos(angle);
+        const y1 = cy + r * Math.sin(angle);
+        angle += sliceAngle;
+        const x2 = cx + r * Math.cos(angle);
+        const y2 = cy + r * Math.sin(angle);
+        const largeArc = sliceAngle > Math.PI ? 1 : 0;
+        return (
+          <path
+            key={status}
+            d={`M ${cx} ${cy} L ${x1.toFixed(1)} ${y1.toFixed(1)} A ${r} ${r} 0 ${largeArc} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} Z`}
+            fill={colors[status]}
+          />
+        );
+      })}
+    </svg>
+  );
 }

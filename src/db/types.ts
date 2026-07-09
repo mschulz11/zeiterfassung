@@ -58,6 +58,7 @@ export interface AppSettings {
   theme: 'daylight' | 'sand' | 'slate' | 'indigo' | 'midnight';
   lookbackDays: number;
   balanceStartDate: string | null;
+  balanceStartDates: string[];  // all Neuzählen dates sorted oldest first, newest last
   balanceGiftMinutes: number;
   weeklyTargetMinutes: number;
   dayTargets: DayTargets;

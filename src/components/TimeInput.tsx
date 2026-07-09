@@ -43,26 +43,45 @@ export function TimeInput({ value, disabled, invalid, onCommit }: Props) {
   }
 
   return (
-    <input
-      type="text"
-      inputMode="numeric"
-      autoComplete="off"
-      disabled={disabled}
-      value={draft}
-      onChange={(event) => {
-        const next = normalizeTimeInput(event.target.value);
-        setDraft(next);
-        if (/^\d{2}:\d{2}$/.test(next)) commit(next);
-      }}
-      onBlur={() => commit()}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          event.currentTarget.blur();
-        }
-      }}
-      className={`input font-mono ${invalid ? 'border-red-400' : ''}`}
-      placeholder="HH:MM"
-      aria-label="Zeit"
-    />
+    <div className="relative">
+      <input
+        type="text"
+        inputMode="numeric"
+        autoComplete="off"
+        disabled={disabled}
+        value={draft}
+        onChange={(event) => {
+          const next = normalizeTimeInput(event.target.value);
+          setDraft(next);
+          if (/^\d{2}:\d{2}$/.test(next)) commit(next);
+        }}
+        onBlur={() => commit()}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.currentTarget.blur();
+          }
+        }}
+        className={`input w-full pr-6 font-mono ${invalid ? 'border-red-400' : ''}`}
+        placeholder="HH:MM"
+        aria-label="Zeit"
+      />
+      {!disabled && (
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => {
+            const now = new Date();
+            const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+            setDraft(hhmm);
+            onCommit(hhmm);
+          }}
+          className="absolute right-1 top-1/2 -translate-y-1/2 rounded px-1 py-0.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+          title="Jetzt"
+          aria-label="Aktuelle Uhrzeit"
+        >
+          ⏱
+        </button>
+      )}
+    </div>
   );
 }
