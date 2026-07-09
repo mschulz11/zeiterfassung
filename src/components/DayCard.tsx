@@ -18,6 +18,8 @@ interface Props {
   onUpdateBlock: (id: number, changes: Pick<Entry, 'fromTime'> | Pick<Entry, 'toTime'>) => void;
   onStatusChange: (status: DayStatus) => void;
   onPromote: () => void;
+  onSetBalanceStart?: () => void;
+  isBalanceStart?: boolean;
 }
 
 export function DayCard({
@@ -32,6 +34,8 @@ export function DayCard({
   onUpdateBlock,
   onStatusChange,
   onPromote,
+  onSetBalanceStart,
+  isBalanceStart,
 }: Props) {
   const { t } = useTranslation();
   const inactive = ['free', 'vacation', 'sick'].includes(status);
@@ -112,6 +116,18 @@ export function DayCard({
             </button>
           )}
         </div>
+        {onSetBalanceStart && (
+          <button
+            type="button"
+            onClick={onSetBalanceStart}
+            className={clsx(
+              'btn btn-ghost mt-3 w-full text-xs border border-dashed border-[var(--border)]',
+              isBalanceStart && 'bg-[var(--bg-soft)] text-indigo-600 dark:text-indigo-300',
+            )}
+          >
+            ⟳ {t('setBalanceStart')}
+          </button>
+        )}
       </div>
     </div>
   );

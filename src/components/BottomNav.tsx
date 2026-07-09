@@ -11,14 +11,18 @@ export function BottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 border-t border-[var(--border)]
                     bg-[var(--bg-card)]/95 backdrop-blur
                     pb-[env(safe-area-inset-bottom)] z-40">
-      <div className="max-w-xl mx-auto grid grid-cols-3">
+      <div className="max-w-xl mx-auto grid grid-cols-4">
         <NavLink to="/" end className={cls}>
           <span aria-hidden>🏠</span>
-          <span>{t('thisWeek')}</span>
+          <span>{t('home')}</span>
         </NavLink>
         <NavLink to="/stats" className={cls}>
           <span aria-hidden>📊</span>
           <span>{t('stats')}</span>
+        </NavLink>
+        <NavLink to="/import" className={cls}>
+          <span aria-hidden>📥</span>
+          <span>{t('import')}</span>
         </NavLink>
         <NavLink to="/settings" className={cls}>
           <span aria-hidden>⚙️</span>

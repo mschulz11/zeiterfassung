@@ -5,6 +5,7 @@ import clsx from 'clsx';
 const COLORS: Record<DayStatus, string> = {
   planned: 'bg-[var(--status-planned)] text-yellow-950',
   worked: 'bg-[var(--status-worked)] text-slate-800 dark:text-slate-100 border border-[var(--border)]',
+  imported: 'bg-purple-100 text-purple-900 border border-purple-300',
   halfday: 'bg-[var(--status-halfday)] text-yellow-950',
   sick: 'bg-[var(--status-sick)] text-white',
   vacation: 'bg-[var(--status-vacation)] text-white dark:text-blue-50',

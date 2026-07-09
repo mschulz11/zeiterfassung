@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { db } from '../db/database';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useTranslation } from 'react-i18next';
-import { hhmmToMinutes, minutesToHHMM, minutesToTime } from '../lib/format';
 import { addDays, startOfYear } from 'date-fns';
-import { fromIsoDate, toIsoDate, weekdayKey } from '../lib/dates';
+import { db } from '../db/database';
 import type { AppSettings, DayState, DayStatus, Entry } from '../db/types';
 import { DayCard } from '../components/DayCard';
 import { DayListItem } from '../components/DayListItem';
 import { actualMinutesForStatus, deltaMinutesForDay, effectiveTargetMinutes, targetMinutesForDate } from '../lib/dayTotals';
+import { hhmmToMinutes, minutesToHHMM, minutesToTime } from '../lib/format';
+import { fromIsoDate, toIsoDate, weekdayKey } from '../lib/dates';
 
-const BLOCKING_STATUSES: DayStatus[] = ['free', 'vacation', 'sick', 'halfday'];
+const BLOCKING_STATUSES: DayStatus[] = ['free', 'vacation', 'sick', 'halfday', 'imported'];
 
 export function HomePage() {
   const { t } = useTranslation();
@@ -51,35 +51,36 @@ export function HomePage() {
     [yearStart, today],
   ) ?? [];
 
-  const dayStateByDate = useMemo(() => {
-    return new Map((dayStates as DayState[]).map((state) => [state.date, state]));
-  }, [dayStates]);
+  const balanceStartDate = settings?.balanceStartDate ?? null;
 
-  const entriesByDate = useMemo(() => {
-    const grouped = new Map<string, Entry[]>();
-    for (const entry of entries as Entry[]) {
-      const list = grouped.get(entry.date) ?? [];
-      list.push(entry);
-      grouped.set(entry.date, list);
-    }
-    for (const list of grouped.values()) list.sort((a, b) => a.order - b.order);
-    return grouped;
-  }, [entries]);
+  const balanceEntries = useLiveQuery(
+    () => (
+      balanceStartDate
+        ? db.entries.where('date').between(balanceStartDate, today, true, true).toArray()
+        : []
+    ),
+    [balanceStartDate, today],
+  ) ?? [];
 
-  const yearEntriesByDate = useMemo(() => {
-    const grouped = new Map<string, Entry[]>();
-    for (const entry of yearEntries as Entry[]) {
-      const list = grouped.get(entry.date) ?? [];
-      list.push(entry);
-      grouped.set(entry.date, list);
-    }
-    for (const list of grouped.values()) list.sort((a, b) => a.order - b.order);
-    return grouped;
-  }, [yearEntries]);
+  const balanceDayStates = useLiveQuery(
+    () => (
+      balanceStartDate
+        ? db.dayState.where('date').between(balanceStartDate, today, true, true).toArray()
+        : []
+    ),
+    [balanceStartDate, today],
+  ) ?? [];
 
-  const yearDayStateByDate = useMemo(() => {
-    return new Map((yearDayStates as DayState[]).map((state) => [state.date, state]));
-  }, [yearDayStates]);
+  const dayStateByDate = useMemo(() => new Map((dayStates as DayState[]).map((state) => [state.date, state])), [dayStates]);
+  const yearDayStateByDate = useMemo(() => new Map((yearDayStates as DayState[]).map((state) => [state.date, state])), [yearDayStates]);
+  const balanceDayStateByDate = useMemo(
+    () => new Map((balanceDayStates as DayState[]).map((state) => [state.date, state])),
+    [balanceDayStates],
+  );
+
+  const entriesByDate = useMemo(() => groupEntriesByDate(entries as Entry[]), [entries]);
+  const yearEntriesByDate = useMemo(() => groupEntriesByDate(yearEntries as Entry[]), [yearEntries]);
+  const balanceEntriesByDate = useMemo(() => groupEntriesByDate(balanceEntries as Entry[]), [balanceEntries]);
 
   useEffect(() => {
     if (!settings) return;
@@ -91,17 +92,20 @@ export function HomePage() {
         if (cancelled) return;
         const day = weekdayKey(fromIsoDate(date));
         const blocks = activeSettings.defaultBlocks[day] ?? [];
+
         if ((day === 'Sat' || day === 'Sun') && !dayStateByDate.get(date)) {
           await db.dayState.put({ date, status: 'free', updatedAt: Date.now() });
           continue;
         }
         if (blocks.length === 0 || targetMinutesForDate(date, activeSettings) === 0) continue;
         if (entriesByDate.get(date)?.length) continue;
+
         const existingState = dayStateByDate.get(date);
         if (existingState && BLOCKING_STATUSES.includes(existingState.status)) continue;
 
         const existingCount = await db.entries.where('date').equals(date).count();
         if (existingCount > 0) continue;
+
         const now = Date.now();
         await db.transaction('rw', db.entries, db.dayState, async () => {
           await db.dayState.put({ date, status: existingState?.status ?? 'planned', updatedAt: now });
@@ -122,10 +126,7 @@ export function HomePage() {
     };
   }, [dayDates, dayStateByDate, entriesByDate, settings]);
 
-  if (!settings) {
-    return <div className="p-4 text-[var(--text-muted)]">…</div>;
-  }
-  const activeSettings = settings;
+  const activeSettings = settings ?? null;
 
   function statusFor(date: string): DayStatus {
     const day = weekdayKey(fromIsoDate(date));
@@ -134,17 +135,26 @@ export function HomePage() {
   }
 
   function targetFor(date: string): number {
-    return targetMinutesForDate(date, activeSettings);
+    return targetMinutesForDate(date, activeSettings!);
   }
 
   function isVisible(date: string): boolean {
     const day = weekdayKey(fromIsoDate(date));
     const weekend = day === 'Sat' || day === 'Sun';
-    return activeSettings.showWeekend || !weekend || Boolean(entriesByDate.get(date)?.length);
+    return activeSettings!.showWeekend || !weekend || Boolean(entriesByDate.get(date)?.length);
   }
 
   async function setStatus(date: string, status: DayStatus) {
     await db.dayState.put({ date, status, updatedAt: Date.now() });
+  }
+
+  async function setBalanceStart(date: string) {
+    const currentGesamtsaldo = cumulativeBalanceByDate.get(today) ?? 0;
+    const currentGift = activeSettings!.balanceGiftMinutes ?? 0;
+    await db.settings.update('app', {
+      balanceStartDate: date,
+      balanceGiftMinutes: currentGift + currentGesamtsaldo,
+    } satisfies Partial<AppSettings>);
   }
 
   async function promoteIfPlanned(date: string) {
@@ -180,6 +190,29 @@ export function HomePage() {
     await db.entries.delete(id);
   }
 
+  const { cumulativeBalanceByDate, gesamtIst, gesamtSoll } = useMemo(() => {
+    const cumulative = new Map<string, number>();
+    if (!activeSettings || !balanceStartDate) return { cumulativeBalanceByDate: cumulative, gesamtIst: 0, gesamtSoll: 0 };
+
+    let sum = 0, ist = 0, soll = 0;
+    for (let cursor = fromIsoDate(balanceStartDate); toIsoDate(cursor) <= today; cursor = addDays(cursor, 1)) {
+      const date = toIsoDate(cursor);
+      const status = balanceDayStateByDate.get(date)?.status
+        ?? (['Sat', 'Sun'].includes(weekdayKey(fromIsoDate(date))) ? 'free' : 'planned');
+      const dayEntries = balanceEntriesByDate.get(date) ?? [];
+      ist += actualMinutesForStatus(dayEntries, status);
+      soll += effectiveTargetMinutes(date, status, activeSettings);
+      sum += deltaMinutesForDay(date, dayEntries, status, activeSettings);
+      cumulative.set(date, sum);
+    }
+
+    return { cumulativeBalanceByDate: cumulative, gesamtIst: ist, gesamtSoll: soll };
+  }, [activeSettings, balanceDayStateByDate, balanceEntriesByDate, balanceStartDate, today]);
+
+  if (!activeSettings) {
+    return <div className="p-4 text-[var(--text-muted)]">…</div>;
+  }
+
   function renderCard(date: string, variant: 'today' | 'past') {
     return (
       <DayCard
@@ -188,45 +221,69 @@ export function HomePage() {
         entries={entriesByDate.get(date) ?? []}
         status={statusFor(date)}
         targetMinutes={targetFor(date)}
-        language={activeSettings.language}
+        language={activeSettings!.language}
         variant={variant}
         onAddBlock={() => void addBlock(date)}
         onDeleteBlock={(id) => void deleteBlock(id)}
         onUpdateBlock={(id, changes) => void updateBlock(date, id, changes)}
         onStatusChange={(status) => void setStatus(date, status)}
         onPromote={() => void setStatus(date, 'worked')}
+        onSetBalanceStart={() => void setBalanceStart(date)}
+        isBalanceStart={date === activeSettings!.balanceStartDate}
       />
     );
   }
 
   const visibleDates = dayDates.filter(isVisible);
   const pastDates = visibleDates.filter((date) => date !== today);
-  const balance = visibleDates.reduce((sum, date) => {
-    return sum + deltaMinutesForDay(date, entriesByDate.get(date) ?? [], statusFor(date), activeSettings);
-  }, 0);
-  const yearBalance = (() => {
-    let sum = 0;
+
+  const { balance: periodDelta, periodIst, periodSoll } = visibleDates.reduce(
+    (acc, date) => {
+      const status = statusFor(date);
+      const dayEntries = entriesByDate.get(date) ?? [];
+      return {
+        balance: acc.balance + deltaMinutesForDay(date, dayEntries, status, activeSettings),
+        periodIst: acc.periodIst + actualMinutesForStatus(dayEntries, status),
+        periodSoll: acc.periodSoll + effectiveTargetMinutes(date, status, activeSettings),
+      };
+    },
+    { balance: 0, periodIst: 0, periodSoll: 0 },
+  );
+
+  const { yearBalance, yearIst, yearSoll } = (() => {
+    let delta = 0, ist = 0, soll = 0;
     for (let cursor = fromIsoDate(yearStart); toIsoDate(cursor) <= today; cursor = addDays(cursor, 1)) {
       const date = toIsoDate(cursor);
       const state = yearDayStateByDate.get(date)?.status
         ?? (['Sat', 'Sun'].includes(weekdayKey(fromIsoDate(date))) ? 'free' : 'planned');
-      sum += deltaMinutesForDay(date, yearEntriesByDate.get(date) ?? [], state, activeSettings);
+      const dayEntries = yearEntriesByDate.get(date) ?? [];
+      ist += actualMinutesForStatus(dayEntries, state);
+      soll += effectiveTargetMinutes(date, state, activeSettings);
+      delta += deltaMinutesForDay(date, dayEntries, state, activeSettings);
     }
-    return sum;
+    return { yearBalance: delta, yearIst: ist, yearSoll: soll };
   })();
+
+  const gesamtDelta = cumulativeBalanceByDate.get(today) ?? 0;
 
   return (
     <div className="pb-4">
       <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--bg-page)]/95 backdrop-blur">
-        <div className="max-w-xl mx-auto px-3 py-3 flex items-center justify-between">
-          <h1 className="text-lg font-semibold">{t('appName')}</h1>
-          <div className="text-right text-xs font-mono">
-            <div className={balance < 0 ? 'text-red-600 dark:text-red-300' : 'text-[var(--text-muted)]'}>
-              {t('balance')}: {minutesToHHMM(balance)}
-            </div>
-            <div className={yearBalance < 0 ? 'text-red-600 dark:text-red-300' : 'text-[var(--text-muted)]'}>
-              {t('yearBalance')}: {minutesToHHMM(yearBalance)}
-            </div>
+        <div className="mx-auto flex max-w-xl items-center justify-between gap-4 px-3 py-3">
+          <h1 className="text-lg font-semibold shrink-0">{t('appName')}</h1>
+          <div className="grid grid-cols-[auto_auto_auto_auto] gap-x-3 gap-y-0 text-right text-xs font-mono overflow-hidden">
+            <div className="text-left text-[var(--text-muted)]"></div>
+            <div className="text-[var(--text-muted)]">{t('actual')}</div>
+            <div className="text-[var(--text-muted)]">{t('target')}</div>
+            <div className="text-[var(--text-muted)]">Δ</div>
+            <BalanceRow label={t('period')} ist={periodIst} soll={periodSoll} delta={periodDelta} />
+            <BalanceRow label={t('year')} ist={yearIst} soll={yearSoll} delta={yearBalance} />
+            {balanceStartDate && <>
+              <BalanceRow label={t('overallTotal')} ist={gesamtIst} soll={gesamtSoll} delta={gesamtDelta} />
+              <div className="text-left text-[var(--text-muted)]">{t('gifted')}</div>
+              <div className="col-span-2 text-[var(--text-muted)]">{minutesToHHMM(activeSettings.balanceGiftMinutes)}</div>
+              <div></div>
+            </>}
           </div>
         </div>
       </header>
@@ -247,6 +304,8 @@ export function HomePage() {
                   targetMinutes={effectiveTargetMinutes(date, statusFor(date), activeSettings)}
                   actualMinutes={actualMinutesForStatus(entriesByDate.get(date) ?? [], statusFor(date))}
                   deltaMinutes={deltaMinutesForDay(date, entriesByDate.get(date) ?? [], statusFor(date), activeSettings)}
+                  cumulativeBalance={cumulativeBalanceByDate.get(date)}
+                  isBalanceStart={date === activeSettings.balanceStartDate}
                   onClick={() => {
                     setExpandedDates((current) => {
                       const next = new Set(current);
@@ -277,7 +336,41 @@ export function HomePage() {
         >
           {t('loadOlderDays')}
         </button>
+
+        <button
+          type="button"
+          onClick={() => setPeriods((value) => Math.max(1, value - 1))}
+          disabled={periods === 1}
+          className="btn btn-ghost w-full border border-[var(--border)]"
+        >
+          {t('loadLessDays')}
+        </button>
       </div>
     </div>
   );
+}
+
+function BalanceRow({ label, ist, soll, delta }: { label: string; ist: number; soll: number; delta: number }) {
+  const deltaColor = delta < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400';
+  return (
+    <>
+      <div className="text-left text-[var(--text-muted)]">{label}</div>
+      <div>{minutesToHHMM(ist)}</div>
+      <div>{minutesToHHMM(soll)}</div>
+      <div className={deltaColor}>{minutesToHHMM(delta)}</div>
+    </>
+  );
+}
+
+function groupEntriesByDate(entries: Entry[]): Map<string, Entry[]> {
+  const grouped = new Map<string, Entry[]>();
+  for (const entry of entries) {
+    const list = grouped.get(entry.date) ?? [];
+    list.push(entry);
+    grouped.set(entry.date, list);
+  }
+  for (const list of grouped.values()) {
+    list.sort((a, b) => a.order - b.order);
+  }
+  return grouped;
 }

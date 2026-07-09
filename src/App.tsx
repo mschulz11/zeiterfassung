@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { db, ensureSettings } from './db/database';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { HomePage } from './pages/HomePage';
+import { ImportPage } from './pages/ImportPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { StatsPage } from './pages/StatsPage';
 import { BottomNav } from './components/BottomNav';
@@ -27,6 +28,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/stats" element={<StatsPage />} />
+          <Route path="/import" element={<ImportPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

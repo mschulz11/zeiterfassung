@@ -3,6 +3,7 @@
 export type DayStatus =
   | 'planned'
   | 'worked'
+  | 'imported'
   | 'halfday'
   | 'free'
   | 'vacation'
@@ -56,6 +57,8 @@ export interface AppSettings {
   language: 'de' | 'en';
   theme: 'daylight' | 'sand' | 'slate' | 'indigo' | 'midnight';
   lookbackDays: number;
+  balanceStartDate: string | null;
+  balanceGiftMinutes: number;
   weeklyTargetMinutes: number;
   dayTargets: DayTargets;
   defaultBlocks: DefaultBlocks;

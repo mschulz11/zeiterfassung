@@ -28,6 +28,7 @@ class ZeiterfassungDB extends Dexie {
         free: 5,
         halfday: 4,
         worked: 3,
+        imported: 2,
         planned: 1,
       };
       const best = new Map<string, { status: DayStatus; rank: number }>();
@@ -69,6 +70,19 @@ class ZeiterfassungDB extends Dexie {
       }));
       if (dayStates.length > 0) await tx.table('dayState').bulkPut(dayStates);
     });
+
+    this.version(3).stores({
+      entries: '++id, date, updatedAt',
+      dayState: '&date, status, updatedAt',
+      settings: 'id',
+      weeks: 'iso, countedForOvertime',
+    }).upgrade(async (tx) => {
+      const settingsTable = tx.table('settings');
+      const existing = await settingsTable.get('app');
+      if (existing) {
+        await settingsTable.put(withSettingsDefaults(existing as Partial<AppSettings>));
+      }
+    });
   }
 }
 
@@ -108,6 +122,8 @@ function defaultSettings(): AppSettings {
     language: 'de',
     theme: 'daylight',
     lookbackDays: 14,
+    balanceStartDate: null,
+    balanceGiftMinutes: 0,
     weeklyTargetMinutes: 2400,
     dayTargets: DEFAULT_DAY_TARGETS,
     defaultBlocks: DEFAULT_BLOCKS,
@@ -131,11 +147,18 @@ function withSettingsDefaults(settings: Partial<AppSettings>): AppSettings {
     ...settings,
     theme: normalizeTheme(settings.theme),
     lookbackDays: Math.max(1, Number(settings.lookbackDays) || defaults.lookbackDays),
+    balanceStartDate: normalizeBalanceStartDate(settings.balanceStartDate),
+    balanceGiftMinutes: Math.max(0, Number(settings.balanceGiftMinutes ?? 0)),
     weeklyTargetMinutes: Number(settings.weeklyTargetMinutes ?? 2400),
     dayTargets: { ...defaults.dayTargets, ...settings.dayTargets },
     defaultBlocks: { ...defaults.defaultBlocks, ...settings.defaultBlocks },
     webdav: { ...defaults.webdav, ...settings.webdav },
   };
+}
+
+function normalizeBalanceStartDate(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
 }
 
 function normalizeTheme(theme: unknown): AppSettings['theme'] {

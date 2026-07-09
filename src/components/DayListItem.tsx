@@ -12,6 +12,8 @@ interface Props {
   actualMinutes: number;
   targetMinutes: number;
   deltaMinutes: number;
+  cumulativeBalance?: number;
+  isBalanceStart?: boolean;
   onClick: () => void;
 }
 
@@ -23,6 +25,8 @@ export function DayListItem({
   actualMinutes,
   targetMinutes,
   deltaMinutes,
+  cumulativeBalance,
+  isBalanceStart,
   onClick,
 }: Props) {
   const { t } = useTranslation();
@@ -36,12 +40,22 @@ export function DayListItem({
     >
       <div className="min-w-0 space-y-1">
         <div className="text-xs font-semibold uppercase text-[var(--text-muted)]">{t(`day.${weekday}`)}</div>
-        <div className="truncate text-sm text-[var(--text-primary)]">{formatDateLong(date, language)}</div>
+        <div className="flex items-center gap-2 truncate text-sm text-[var(--text-primary)]">
+          {isBalanceStart && <span aria-hidden className="shrink-0 text-xs text-indigo-600 dark:text-indigo-300">⟳</span>}
+          <span className="truncate">{formatDateLong(date, language)}</span>
+        </div>
         <div className="font-mono text-xs text-[var(--text-muted)]">
           {t('target')} {minutesToHHMM(targetMinutes)} · {t('actual')} {minutesToHHMM(actualMinutes)} ·{' '}
           <span className={deltaMinutes < 0 ? 'text-red-600 dark:text-red-300' : 'text-emerald-600 dark:text-emerald-300'}>
             Δ {minutesToHHMM(deltaMinutes)}
           </span>
+          {cumulativeBalance !== undefined && (
+            <>
+              {' '}| {t('totalBalance')}: <span className={cumulativeBalance < 0 ? 'text-red-600 dark:text-red-300' : 'text-emerald-600 dark:text-emerald-300'}>
+                {minutesToHHMM(cumulativeBalance)}
+              </span>
+            </>
+          )}
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">

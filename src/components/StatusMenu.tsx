@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { DayStatus } from '../db/types';
 import { StatusBadge } from './StatusBadge';
 
-const OPTIONS: DayStatus[] = ['worked', 'halfday', 'free', 'vacation', 'sick'];
+const OPTIONS: DayStatus[] = ['worked', 'imported', 'halfday', 'free', 'vacation', 'sick'];
 
 interface Props {
   value: DayStatus;
