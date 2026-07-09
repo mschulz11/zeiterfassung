@@ -7,22 +7,7 @@ export interface ImportedDay {
   entries: Array<{ fromTime: string; toTime: string }>;
 }
 
-const WEEKDAY_PATTERN = /^(Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag)\b/i;
 const HEADER_SKIP_TOKENS = ['neuzählen', 'für die firma', 'gesamt', 'wochentag', 'von', 'woche'];
-const MONTHS: Record<string, number> = {
-  januar: 1,
-  februar: 2,
-  marz: 3,
-  april: 4,
-  mai: 5,
-  juni: 6,
-  juli: 7,
-  august: 8,
-  september: 9,
-  oktober: 10,
-  november: 11,
-  dezember: 12,
-};
 
 export function parseExcelFile(buffer: ArrayBuffer): ImportedDay[] {
   const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array', cellDates: false, raw: true });
